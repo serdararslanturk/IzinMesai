@@ -1815,16 +1815,28 @@ function saatFark(b, s){
   return Math.round(dk/60*100)/100;
 }
 
-function saatlikUcret(pid){
-  const p = per(pid); if(!p || !p.ucret) return 0;
-  const gun = Number(p.aylikGun) || 30;
-  const saat = Number(S.ayar.gunlukSaat) || 7.5;
-  const bolen = gun * saat;
-  return bolen > 0 ? p.ucret / bolen : 0;
+/* --- Ücret --- */
+/* Ücret kartta aylık ya da günlük (yevmiye) girilebilir. Kartta girilen tutar p.ucret,
+   hangi birimde girildiği p.ucretTipi alanında durur. Raporlar aylık karşılık üzerinden
+   çalıştığı için okurken aylikUcret() kullanılır. */
+const UCRET_TIPLERI = [['aylik','Aylık ücret'],['gunluk','Günlük ücret (yevmiye)']];
+function ucretTipi(p){ return (p && p.ucretTipi === 'gunluk') ? 'gunluk' : 'aylik'; }
+function ucretTipiAd(p){ return ucretTipi(p) === 'gunluk' ? 'Günlük' : 'Aylık'; }
+function ayGun(p){ return Number(p && p.aylikGun) || 30; }
+/* pid ya da personel nesnesi (kaydedilmemiş kart taslağı da olabilir) alır */
+function ucretKisi(pVeyaId){ return typeof pVeyaId === 'string' ? per(pVeyaId) : pVeyaId; }
+
+function aylikUcret(pVeyaId){
+  const p = ucretKisi(pVeyaId); if(!p || !p.ucret) return 0;
+  return ucretTipi(p) === 'gunluk' ? p.ucret * ayGun(p) : p.ucret;
 }
-function gunlukUcret(pid){
-  const p = per(pid); if(!p || !p.ucret) return 0;
-  return p.ucret / (Number(p.aylikGun) || 30);
+function gunlukUcret(pVeyaId){
+  const p = ucretKisi(pVeyaId); if(!p || !p.ucret) return 0;
+  return ucretTipi(p) === 'gunluk' ? p.ucret : p.ucret / ayGun(p);
+}
+function saatlikUcret(pVeyaId){
+  const saat = Number(S.ayar.gunlukSaat) || 7.5;
+  return saat > 0 ? gunlukUcret(pVeyaId) / saat : 0;
 }
 
 /* Geniş tabloların üstüne ikinci bir yatay kaydırma çubuğu koyar */
@@ -4393,7 +4405,7 @@ function vPersonel(){
 
 function personelForm(id){
   S.duzenlenenId = id || '';
-  const p = id ? per(id) : {id:'', tcno:'', ad:'', soyad:'', dept:'', lokasyon:'', unvan:'', kidem:'', giris:'', cikis:'', dogum:'', yonetici:'', rol:'personel', email:'', tel:'', devir:0, devirTarihi:'', ucret:0, aylikGun:30, aktif:true};
+  const p = id ? per(id) : {id:'', tcno:'', ad:'', soyad:'', dept:'', lokasyon:'', unvan:'', kidem:'', giris:'', cikis:'', dogum:'', yonetici:'', rol:'personel', email:'', tel:'', devir:0, devirTarihi:'', ucret:0, ucretTipi:'aylik', aylikGun:30, aktif:true};
   const bslk = t => '<div class="full bslk">'+t+'</div>';
 
   modalAc('<div class="mh"><h3>'+(id?esc(p.ad+' '+p.soyad):'Yeni personel')+'</h3>'
@@ -4431,8 +4443,13 @@ function personelForm(id){
     + '<option value="ik"'+(p.rol==='ik'?' selected':'')+'>İK / Sistem yöneticisi</option></select></div>'
 
   + bslk('Ücret')
-  + '<div class="fld"><label class="lb">Aylık net ücret (₺)</label><input type="text" inputmode="decimal" id="p_ucret" value="'+paraYaz(p.ucret||0)+'" oninput="tutarGir(this)"></div>'
-  + '<div class="fld"><label class="lb">Aylık çalışma gün sayısı</label><input type="number" step="1" id="p_agun" value="'+(p.aylikGun||30)+'"></div>'
+  + '<div class="fld"><label class="lb">Ücret tipi</label><select id="p_ucretTipi" onchange="ucretOzet()">'
+    + UCRET_TIPLERI.map(x=>'<option value="'+x[0]+'"'+(x[0]===ucretTipi(p)?' selected':'')+'>'+x[1]+'</option>').join('')
+    + '</select></div>'
+  + '<div class="fld"><label class="lb" id="p_ucretLb">'+ucretTipiAd(p)+' net ücret (₺)</label>'
+  + '<input type="text" inputmode="decimal" id="p_ucret" value="'+paraYaz(p.ucret||0)+'" oninput="tutarGir(this,ucretOzet)"></div>'
+  + '<div class="fld"><label class="lb">Aylık çalışma gün sayısı</label><input type="number" step="1" id="p_agun" value="'+(p.aylikGun||30)+'" oninput="ucretOzet()"></div>'
+  + '<div class="full" id="p_ucretOzet"></div>'
 
   + bslk('İletişim')
   + fld('E-posta','p_email','email',p.email)
@@ -4446,7 +4463,7 @@ function personelForm(id){
   + (id?'<button class="btn no" style="margin-right:auto" onclick="personelSil(\''+id+'\')">Sil</button>':'')
   + '<button class="btn" onclick="modalKapat()">Vazgeç</button>'
   + '<button class="btn pri" onclick="personelKaydet(\''+(id||'')+'\')">Kaydet</button></div>');
-  tcKontrol(); cikisKontrol(); devirOzet();
+  tcKontrol(); cikisKontrol(); devirOzet(); ucretOzet();
 }
 
 /* Bakiye ve bir sonraki hak ediş özeti */
@@ -4482,6 +4499,40 @@ function devirOzet(){
       : '<div class="hint">Hak ediş tarihi hesaplanamadı.</div>')
     + '<div><div class="lb" style="font-size:10px">'+S.yil+' yıl sonu kalan</div>'
     + '<div style="font-weight:600;margin-top:4px" class="mono">'+sayi(bk.yilSonuKalan)+' gün</div></div>'
+    + '</div></div>';
+}
+
+/* Ücret tipine göre etiketi günceller, aylık/günlük/saatlik karşılıkları gösterir */
+function ucretOzet(){
+  const el = document.getElementById('p_ucretOzet');
+  if(!el) return;
+  const tipEl = document.getElementById('p_ucretTipi');
+  const tip = (tipEl && tipEl.value === 'gunluk') ? 'gunluk' : 'aylik';
+  const taslak = {ucret: paraCoz(($('#p_ucret')||{}).value),
+                  ucretTipi: tip,
+                  aylikGun: Number(($('#p_agun')||{}).value) || 30};
+
+  const lb = document.getElementById('p_ucretLb');
+  if(lb) lb.textContent = ucretTipiAd(taslak)+' net ücret (₺)';
+
+  if(!taslak.ucret){
+    el.innerHTML = '<div class="hint">Ücret girilince aylık, günlük ve saatlik karşılıkları burada görünür. '
+      + 'Kadro raporu ve mesai tutarları aylık karşılık üzerinden hesaplanır.</div>';
+    return;
+  }
+
+  const kutu = (etiket, deger, vurgu) =>
+    '<div><div class="lb" style="font-size:10px">'+etiket+'</div>'
+    + '<div class="mono" style="'+(vurgu?'font-weight:600':'')+';margin-top:4px'+(vurgu?'':';color:var(--ink3)')+'">'
+    + sayi(deger)+' ₺</div></div>';
+
+  el.innerHTML = '<div class="card" style="box-shadow:none;background:var(--surface2)"><div class="bd row" style="gap:22px;padding:12px 14px">'
+    + kutu('Aylık karşılık', aylikUcret(taslak), tip === 'gunluk')
+    + kutu('Günlük ücret', gunlukUcret(taslak), tip === 'aylik')
+    + kutu('Saatlik ücret', saatlikUcret(taslak), false)
+    + '<div style="margin-left:auto;max-width:290px"><div class="lb" style="font-size:10px">Kayda giren</div>'
+    + '<div class="hint" style="margin-top:5px">'+ucretTipiAd(taslak).toLocaleLowerCase('tr')+' tutar · '
+    + taslak.aylikGun+' gün × '+sayi(Number(S.ayar.gunlukSaat)||7.5)+' saat üzerinden</div></div>'
     + '</div></div>';
 }
 
@@ -4541,7 +4592,9 @@ function personelKaydet(id){
     kidem:tarihAl('p_kidem'), giris:tarihAl('p_giris'), cikis:tarihAl('p_cikis'),
     devirTarihi:tarihAl('p_devirTarihi'),
     dogum:tarihAl('p_dogum'), devir:Number($('#p_devir').value)||0, email:$('#p_email').value.trim(),
-    tel:$('#p_tel').value.trim(), ucret:paraCoz($('#p_ucret').value), aylikGun:Number($('#p_agun').value)||30,
+    tel:$('#p_tel').value.trim(), ucret:paraCoz($('#p_ucret').value),
+    ucretTipi: $('#p_ucretTipi').value === 'gunluk' ? 'gunluk' : 'aylik',
+    aylikGun:Number($('#p_agun').value)||30,
     yonetici:$('#p_yon').value, rol:$('#p_rol').value, aktif:$('#p_aktif').checked,
     mesaiKapali: !$('#p_mesai').checked};
   if(!o.ad || !o.soyad){ bildir('Ad ve soyad zorunlu.'); return; }
@@ -4579,8 +4632,9 @@ function iceAktar(){
   modalAc('<div class="mh"><h3>Personel listesi içe aktar</h3><button class="x" onclick="modalKapat()">×</button></div><div class="mb">'
   + '<div class="hint">Excel’den kopyalayıp yapıştırın. İlk satır başlık olmalı. Ayraç olarak sekme, noktalı virgül veya virgül kullanılabilir.</div>'
   + '<div class="card mt" style="box-shadow:none;background:var(--surface2)"><div class="bd"><div class="lb">Beklenen sütunlar</div>'
-  + '<div class="mono" style="font-size:12px;margin-top:6px;line-height:1.7">tc · ad · soyad · departman · lokasyon · unvan · kidem · giris · cikis · dogum · yonetici_tc · rol · devir · bakiye_tarihi · net_ucret · aylik_gun</div>'
-  + '<div class="hint" style="margin-top:6px">Tarihler GG.AA.YYYY veya YYYY-AA-GG olabilir. rol sütunu boşsa "personel" kabul edilir.</div></div></div>'
+  + '<div class="mono" style="font-size:12px;margin-top:6px;line-height:1.7">tc · ad · soyad · departman · lokasyon · unvan · kidem · giris · cikis · dogum · yonetici_tc · rol · devir · bakiye_tarihi · ucret_tipi · net_ucret · aylik_gun</div>'
+  + '<div class="hint" style="margin-top:6px">Tarihler GG.AA.YYYY veya YYYY-AA-GG olabilir. rol sütunu boşsa "personel" kabul edilir. '
+  + 'ucret_tipi sütunu “günlük” ise tutar yevmiye olarak okunur; boşsa aylık kabul edilir.</div></div></div>'
   + '<div class="fld mt"><label class="lb">Veri</label><textarea id="imp" style="min-height:190px;font-family:\'IBM Plex Mono\';font-size:12.5px" placeholder="tc	ad	soyad	departman	unvan	kidem&#10;12345678901	Serdar	Yılmaz	YÖNETİM	MÜDÜR	14.03.2016"></textarea></div>'
   + '<label class="row mt" style="cursor:pointer"><input type="checkbox" id="imp_temiz" style="width:auto"> Mevcut personel listesinin yerine geçsin</label>'
   + '</div><div class="mf"><button class="btn" onclick="modalKapat()">Vazgeç</button>'
@@ -4601,9 +4655,27 @@ function iceAktarUygula(){
   const ayrac = satirlar[0].includes('\t') ? '\t' : satirlar[0].includes(';') ? ';' : ',';
   const bas = satirlar[0].split(ayrac).map(x=>x.trim().toLocaleLowerCase('tr').replace(/\s+/g,'_'));
   const idx = n => bas.findIndex(x => x === n || x.startsWith(n));
+  /* Adayları sırayla dener, verilen başlıkları hiç dikkate almaz. Ücret sütunları
+     birbirine benzediği için ("ucret_tipi", "aylik_net_ucret") gerekli. */
+  const idxCok = (adlar, haric) => {
+    for(const n of adlar){
+      const i = bas.findIndex(x => !(haric||[]).includes(x) && (x === n || x.startsWith(n)));
+      if(i >= 0) return i;
+    }
+    return -1;
+  };
+  const TUTAR_SUT = ['ucret_tipi','girilen_ucret','aylik_net_ucret','gunluk_net_ucret',
+                     'net_ucret','saatlik_net_ucret'];
+
   const c = {tc:idx('tc'), ad:idx('ad'), soyad:idx('soyad'), dept:idx('depart'), lok:idx('lokasyon'),
              unvan:idx('unvan'), kidem:idx('kidem'), giris:idx('giris'), cikis:idx('cikis'), dogum:idx('dogum'),
-             yon:idx('yonetici'), rol:idx('rol'), devir:idx('devir'), devirTarihi:idx('bakiye_tar'), ucret:idx('ucret'), agun:idx('aylik')};
+             yon:idx('yonetici'), rol:idx('rol'), devir:idx('devir'), devirTarihi:idx('bakiye_tar')};
+  c.ucretTipi = bas.indexOf('ucret_tipi');
+  /* Tip sütunu varsa girilen tutar o tiptedir; yoksa aylık sütunu esas alınır */
+  c.ucret = idxCok(c.ucretTipi >= 0
+      ? ['girilen_ucret','aylik_net_ucret','net_ucret','ucret']
+      : ['aylik_net_ucret','net_ucret','aylik_ucret','ucret','girilen_ucret'], ['ucret_tipi']);
+  c.agun = idxCok(['aylik_gun','aylik_calisma','aylikgun','aylik'], TUTAR_SUT);
   if(c.tc < 0) c.tc = idx('kimlik');
   if(c.lok < 0) c.lok = idx('sgk');
   if(c.unvan < 0) c.unvan = idx('gorev');
@@ -4621,6 +4693,7 @@ function iceAktarUygula(){
       devir:Number(String(al('devir')).replace(',','.'))||0,
       devirTarihi:tarihCoz(al('devirTarihi')),
       ucret:paraCoz(al('ucret')),
+      ucretTipi:String(al('ucretTipi')).toLocaleLowerCase('tr').startsWith('g') ? 'gunluk' : 'aylik',
       aylikGun:Number(al('agun'))||30, email:'', tel:'', yonetici:'',
       aktif:!(tarihCoz(al('cikis')) && tarihCoz(al('cikis')) <= bugun())});
   }
@@ -4643,11 +4716,13 @@ function iceAktarUygula(){
 }
 
 function disaAktar(){
-  const bas = ['tc','ad','soyad','departman','lokasyon','unvan','kidem_tarihi','giris','cikis','kidem_yil','yonetici','rol','net_ucret','aylik_gun','saatlik_net_ucret','yillik_hak','bakiye_tarihi','devir','kazanilan','kullanilan','planlanan','kalan','yil_sonu_toplam_hak','yil_sonu_kalan','sonraki_hak_edis','sonraki_gun'];
+  const bas = ['tc','ad','soyad','departman','lokasyon','unvan','kidem_tarihi','giris','cikis','kidem_yil','yonetici','rol','ucret_tipi','girilen_ucret','aylik_net_ucret','gunluk_net_ucret','aylik_gun','saatlik_net_ucret','yillik_hak','bakiye_tarihi','devir','kazanilan','kullanilan','planlanan','kalan','yil_sonu_toplam_hak','yil_sonu_kalan','sonraki_hak_edis','sonraki_gun'];
   const satir = S.personel.map(p=>{
     const b = bakiye(p.id, S.yil);
     return [p.tcno||'',p.ad,p.soyad,p.dept,p.lokasyon||'',p.unvan,p.kidem||p.giris,p.giris,p.cikis||'',kidemYili(p.id,S.yil),
-            p.yonetici?adSoyad(p.yonetici):'',p.rol,p.ucret||0,p.aylikGun||30,Math.round(saatlikUcret(p.id)*100)/100,b.hak,b.bakiyeTarihi,b.devir,b.kazanilan,b.kullanilan,b.planlanan,b.kalan,b.yilSonuHak,b.yilSonuKalan,
+            p.yonetici?adSoyad(p.yonetici):'',p.rol,
+            ucretTipi(p),p.ucret||0,aylikUcret(p),Math.round(gunlukUcret(p)*100)/100,
+            p.aylikGun||30,Math.round(saatlikUcret(p.id)*100)/100,b.hak,b.bakiyeTarihi,b.devir,b.kazanilan,b.kullanilan,b.planlanan,b.kalan,b.yilSonuHak,b.yilSonuKalan,
             b.sonraki?b.sonraki.tarih:'',b.sonraki?b.sonraki.gun:'']
       .map(x=>'"'+String(x==null?'':x).replace(/"/g,'""')+'"').join(';');
   });
@@ -5307,13 +5382,23 @@ function vIzinde(){
 
 function kadroKisiler(){ return S.personel.filter(p => p.aktif); }
 
+/* Tablolarda ücret hücresi: tutar aylık karşılık, günlük ücretlilerde yevmiye alt satırda */
+function ucretHucre(p){
+  if(!aylikUcret(p)) return '<span class="hint">tanımsız</span>';
+  return sayi(aylikUcret(p))+' ₺'
+    + (ucretTipi(p) === 'gunluk'
+        ? '<div class="hint" style="font-family:\'Inter\';font-size:11px">günlük '+sayi(p.ucret)+' ₺ × '+ayGun(p)+' gün</div>'
+        : '');
+}
+
 function kadroTopla(alan){
   const harita = new Map();
   for(const p of kadroKisiler()){
     const k = (alan === 'dept' ? p.dept : p.lokasyon) || '—';
     const g = harita.get(k) || {ad:k, kisi:0, ucret:0, ucretli:0};
     g.kisi++;
-    if(p.ucret > 0){ g.ucret += p.ucret; g.ucretli++; }
+    const u = aylikUcret(p);
+    if(u > 0){ g.ucret += u; g.ucretli++; }
     harita.set(k, g);
   }
   return [...harita.values()].sort((a,b) => b.kisi - a.kisi || a.ad.localeCompare(b.ad,'tr'));
@@ -5381,8 +5466,9 @@ function kadroCapraz(){
 
 function vKadro(){
   const kisiler = kadroKisiler();
-  const ucretli = kisiler.filter(p => p.ucret > 0);
-  const toplamUcret = ucretli.reduce((a,p) => a + p.ucret, 0);
+  const ucretli = kisiler.filter(p => aylikUcret(p) > 0);
+  const toplamUcret = ucretli.reduce((a,p) => a + aylikUcret(p), 0);
+  const gunlukSayisi = kisiler.filter(p => ucretTipi(p) === 'gunluk' && p.ucret > 0).length;
   const sekme = S.sekme.kadro || 'liste';
 
   let h = '<h1 style="font-size:20px;margin-bottom:4px">Kadro ve ücret raporu</h1>'
@@ -5392,7 +5478,8 @@ function vKadro(){
     + stat('Toplam personel', kisiler.length, 'kişi',
         [...new Set(kisiler.map(p => p.dept))].length+' departman · '
         + [...new Set(kisiler.map(p => p.lokasyon || '—'))].length+' lokasyon')
-    + stat('Aylık ücret toplamı', sayi(toplamUcret), '₺', 'Brüt · '+ucretli.length+' kişi üzerinden')
+    + stat('Aylık ücret toplamı', sayi(toplamUcret), '₺', 'Brüt · '+ucretli.length+' kişi üzerinden'
+        + (gunlukSayisi ? ' · '+gunlukSayisi+' kişi günlük ücretli' : ''))
     + stat('Ortalama ücret', ucretli.length ? sayi(Math.round(toplamUcret / ucretli.length)) : 0, '₺',
         'Ücreti tanımlı personel')
     + stat('Ücreti tanımsız', kisiler.length - ucretli.length, 'kişi',
@@ -5418,9 +5505,11 @@ function kadroDisaAktar(){
   const sekme = S.sekme.kadro || 'liste';
   if(sekme === 'liste' || sekme === 'capraz'){
     const kisiler = kadroKisiler().sort((a,b) => adSoyad(a.id).localeCompare(adSoyad(b.id),'tr'));
-    const bas = ['Ad Soyad','Unvan','Departman','Lokasyon','Yönetici','İşe giriş','Aylık ücret'];
+    const bas = ['Ad Soyad','Unvan','Departman','Lokasyon','Yönetici','İşe giriş',
+                 'Ücret tipi','Girilen ücret','Aylık ücret'];
     const satir = kisiler.map(p => [adSoyad(p.id), p.unvan||'', p.dept||'', p.lokasyon||'',
-      p.yonetici ? adSoyad(p.yonetici) : '', trTarih(p.giris), p.ucret||0].join(';'));
+      p.yonetici ? adSoyad(p.yonetici) : '', trTarih(p.giris),
+      ucretTipiAd(p), p.ucret||0, aylikUcret(p)].join(';'));
     indir('\uFEFF'+bas.join(';')+'\n'+satir.join('\n'), 'kadro-liste-'+bugun()+'.csv', 'text/csv;charset=utf-8');
     bildir(kisiler.length+' kayıt indirildi.');
     return;
@@ -5448,14 +5537,14 @@ function kadroKisileri(alan, ad, ikinci){
   const l = alan === 'capraz' ? hepsi.filter(p => p.dept === ad && (p.lokasyon || '—') === ikinci)
     : alan === 'lok' ? hepsi.filter(p => (p.lokasyon || '—') === ad)
     : hepsi.filter(p => p.dept === ad);
-  return l.sort((a,b) => (b.ucret||0) - (a.ucret||0) || adSoyad(a.id).localeCompare(adSoyad(b.id),'tr'));
+  return l.sort((a,b) => aylikUcret(b) - aylikUcret(a) || adSoyad(a.id).localeCompare(adSoyad(b.id),'tr'));
 }
 
 /* Satırın altında açılan kişi listesi */
 function kadroDetayIc(alan, ad, ikinci){
   const kisiler = kadroKisileri(alan, ad, ikinci);
-  const ucretli = kisiler.filter(p => p.ucret > 0);
-  const toplam = ucretli.reduce((a,p) => a + p.ucret, 0);
+  const ucretli = kisiler.filter(p => aylikUcret(p) > 0);
+  const toplam = ucretli.reduce((a,p) => a + aylikUcret(p), 0);
   const ikSut = alan === 'lok' ? 'Departman' : alan === 'dept' ? 'Lokasyon' : '';
 
   return '<div class="kadrodetay">'
@@ -5473,7 +5562,7 @@ function kadroDetayIc(alan, ad, ikinci){
       + '<td class="hint">'+esc(p.unvan||'')+'</td>'
       + (ikSut ? '<td class="hint">'+esc(alan === 'lok' ? (p.dept||'') : (p.lokasyon||'—'))+'</td>' : '')
       + '<td class="mono hint">'+trTarih(p.giris)+'</td>'
-      + '<td class="num mono">'+(p.ucret ? sayi(p.ucret)+' ₺' : '<span class="hint">tanımsız</span>')+'</td></tr>').join('')
+      + '<td class="num mono">'+ucretHucre(p)+'</td></tr>').join('')
   + '<tr class="ictoplam"><td colspan="'+(ikSut?3:2)+'"><b>Toplam</b></td><td></td>'
   + '<td class="num mono"><b>'+sayi(toplam)+' ₺</b></td></tr>'
   + '</tbody></table></div>';
@@ -5482,9 +5571,10 @@ function kadroDetayIc(alan, ad, ikinci){
 /* Açılan listeyi Excel'e (CSV) aktarır */
 function kadroDetayAktar(alan, ad, ikinci){
   const kisiler = kadroKisileri(alan, ad, ikinci || undefined);
-  const bas = ['Ad Soyad','Unvan','Departman','Lokasyon','İşe giriş','Aylık ücret'];
+  const bas = ['Ad Soyad','Unvan','Departman','Lokasyon','İşe giriş',
+               'Ücret tipi','Girilen ücret','Aylık ücret'];
   const satir = kisiler.map(p => [adSoyad(p.id), p.unvan||'', p.dept||'', p.lokasyon||'',
-    trTarih(p.giris), p.ucret||0].join(';'));
+    trTarih(p.giris), ucretTipiAd(p), p.ucret||0, aylikUcret(p)].join(';'));
   const dosya = 'kadro-'+(ad+(ikinci?'-'+ikinci:'')).replace(/[^A-Za-z0-9ĞÜŞİÖÇğüşıöç]+/g,'-')+'.csv';
   indir('\uFEFF'+bas.join(';')+'\n'+satir.join('\n'), dosya, 'text/csv;charset=utf-8');
   bildir(kisiler.length+' kayıt indirildi.');
@@ -5562,10 +5652,10 @@ function kadroListe(){
   kadroLst.dept = depts;
   kadroLst.lok = loks;
   kadroLst.yon = yonler.map(y => adSoyad(y));
-  kadroLst.ucret = [...new Set(hepsi.filter(p => p.ucret > 0).map(p => p.ucret))]
+  kadroLst.ucret = [...new Set(hepsi.map(p => aylikUcret(p)).filter(v => v > 0))]
     .sort((a,b) => b - a).map(v => sayi(v)+' ₺').concat(['Ücreti tanımsız']);
 
-  const ucretEt = p => p.ucret > 0 ? sayi(p.ucret)+' ₺' : 'Ücreti tanımsız';
+  const ucretEt = p => aylikUcret(p) > 0 ? sayi(aylikUcret(p))+' ₺' : 'Ücreti tanımsız';
 
   const kisiler = hepsi.filter(p =>
       (!kadroSec.dept.length || kadroSec.dept.includes(p.dept))
@@ -5573,11 +5663,11 @@ function kadroListe(){
    && (!kadroSec.yon.length || kadroSec.yon.includes(p.yonetici ? adSoyad(p.yonetici) : ''))
    && (!kadroSec.ucret.length || kadroSec.ucret.includes(ucretEt(p)))
    && (!ara || (adSoyad(p.id)+' '+(p.unvan||'')).toLocaleLowerCase('tr').includes(ara)))
-    .sort((a,b) => kadroSira === 'desc' ? (b.ucret||0) - (a.ucret||0)
-                 : kadroSira === 'asc'  ? (a.ucret||0) - (b.ucret||0)
+    .sort((a,b) => kadroSira === 'desc' ? aylikUcret(b) - aylikUcret(a)
+                 : kadroSira === 'asc'  ? aylikUcret(a) - aylikUcret(b)
                  : adSoyad(a.id).localeCompare(adSoyad(b.id),'tr'));
 
-  const toplam = kisiler.reduce((a,p) => a + (p.ucret || 0), 0);
+  const toplam = kisiler.reduce((a,p) => a + aylikUcret(p), 0);
   const filtreVar = kadroAra || kadroSira || kadroSec.dept.length || kadroSec.lok.length
     || kadroSec.yon.length || kadroSec.ucret.length;
 
@@ -5613,7 +5703,7 @@ function kadroListe(){
       + '<td class="hint">'+esc(p.lokasyon||'—')+'</td>'
       + '<td class="hint">'+esc(p.yonetici ? adSoyad(p.yonetici) : '—')+'</td>'
       + '<td class="mono hint" style="font-size:12.5px">'+trTarih(p.giris)+'</td>'
-      + '<td class="num mono">'+(p.ucret ? sayi(p.ucret)+' ₺' : '<span class="hint">tanımsız</span>')+'</td></tr>';
+      + '<td class="num mono">'+ucretHucre(p)+'</td></tr>';
   }
   if(!kisiler.length) h += '<tr><td colspan="6"><div class="empty"><div class="e1">Kayıt bulunamadı</div>Filtreleri değiştirin.</div></td></tr>';
   else h += '<tr class="dip"><td class="stl"><b>Toplam · '+kisiler.length+' kişi</b></td>'
@@ -6209,6 +6299,8 @@ function gocEt(){
     }
     if(p.aylikGun === undefined || !p.aylikGun) p.aylikGun = 30;
     if(p.ucret === undefined) p.ucret = 0;
+    /* Eski kayıtlarda ücret her zaman aylıktı */
+    if(p.ucretTipi !== 'gunluk') p.ucretTipi = 'aylik';
     if(p.tcno === undefined) p.tcno = '';
     if(p.kidem === undefined) p.kidem = p.giris || '';
     if(p.lokasyon === undefined) p.lokasyon = '';
