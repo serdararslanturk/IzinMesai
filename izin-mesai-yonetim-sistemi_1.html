@@ -2572,10 +2572,15 @@ function vIzinlerim(){
         Number(b.bakiyeTarihi.slice(0,4)) >= S.yil
           ? trTarih(b.bakiyeTarihi)+' itibarıyla'
           : (S.yil-1)+' yılından devir')
-    + stat('Kullanılan', (b.yilToplamKullanim ? '−' : '') + sayi(b.yilToplamKullanim), 'gün',
-        b.oncekiKullanim ? sayi(b.oncekiKullanim)+' günü dönem başı rakamına dahil' : 'Planlananlar dahil',
-        b.yilToplamKullanim ? 'var(--red)' : '',
-        "izinDokum('"+p.id+"')", 'raporlu')
+    + (() => {
+        const gerc = b.yilToplamKullanim - b.planlanan;   // sadece gerçekleşen (planlanan hariç)
+        let alt = '';
+        if(b.planlanan) alt += '<span style="color:var(--bekle)">+ '+sayi(b.planlanan)+' gün planlanmış</span>';
+        if(b.oncekiKullanim) alt += (alt?'<br>':'') + sayi(b.oncekiKullanim)+' günü dönem başı rakamına dahil';
+        if(!alt) alt = 'Bugüne dek gerçekleşen';
+        return stat('Kullanılan', (gerc ? '−' : '') + sayi(gerc), 'gün', alt,
+          gerc ? 'var(--red)' : '', "izinDokum('"+p.id+"')", 'raporlu');
+      })()
     + stat('Güncel kalan izin hakkı', sayi(b.kalan), 'gün',
         S.yil === new Date().getFullYear() ? 'Bugün kullanılabilir' : S.yil+' içinde kullanılabilir')
     + stat(S.yil+' hak edişinden gelecek', sayi(b.yilSonuEk), 'gün',
