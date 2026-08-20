@@ -2524,6 +2524,7 @@ function izinSatiri(i, yonetimGorunumu){
           : trTarih(sonrakiIsGunu(i.bit)))+'</td>'
     + '<td data-e="Gün" class="num">'+izinSuresiYazi(i)+'</td>'
     + '<td data-e="Durum">'+durumTag(i.durum)
+      + (i.revizeliOnay ? ' <span class="pill" style="background:var(--bekle-soft);border-color:var(--bekle-line);color:var(--bekle)" title="'+esc((i.revizeEden||'Yönetici')+' tarafından revize edildi'+(i.revizeNot?': '+i.revizeNot:''))+'">Revize edildi</span>' : '')
       + (izinBakiyeOncesi(i) ? ' <span class="pill" title="Bakiye tarihinden önce — girdiğiniz bakiyenin içinde sayılır">Bakiyede</span>' : '')
       + '</td>'
     + '<td class="str islem">'+ops+'</td></tr>';
@@ -2567,19 +2568,35 @@ function vIzinlerim(){
     + '<span class="hint">'+kuy.izinler.length+' izin talebi, '+kuy.mesailer.length+' mesai kaydı.</span></div>'
     + '<button class="btn pri" style="margin-left:auto" onclick="git(\'onay\')">Bekleyen onayları aç</button></div></div>';
 
+  // Talep sahibine: yöneticinin revize ettiği / reddettiği izinler — "İzin Taleplerim" altında derli toplu gösterilir
+  const bildirimler = (p.id === S.aktifId)
+    ? S.izin.filter(i => i.pid === p.id && ((i.revizeliOnay && !i.revizeGoruldu) || (i.durum === 'reddedildi' && !i.redGoruldu)))
+        .map(i => ({ i, ret: (i.durum === 'reddedildi'),
+                     zaman: (i.durum === 'reddedildi') ? (i.redTarih||'') : (i.revizeTarih||'') }))
+        .sort((a,c) => String(c.zaman).localeCompare(String(a.zaman)))
+    : [];
+
   h += '<div class="grid g5" style="margin-bottom:14px">'
     + stat('Dönem başı izin hakkı', sayi(b.devir), 'gün',
         Number(b.bakiyeTarihi.slice(0,4)) >= S.yil
           ? trTarih(b.bakiyeTarihi)+' itibarıyla'
           : (S.yil-1)+' yılından devir')
     + (() => {
-        const gerc = b.yilToplamKullanim - b.planlanan;   // sadece gerçekleşen (planlanan hariç)
-        let alt = '';
-        if(b.planlanan) alt += '<span style="color:var(--bekle)">+ '+sayi(b.planlanan)+' gün planlanmış</span>';
-        if(b.oncekiKullanim) alt += (alt?'<br>':'') + sayi(b.oncekiKullanim)+' günü dönem başı rakamına dahil';
-        if(!alt) alt = 'Bugüne dek gerçekleşen';
-        return stat('Kullanılan', (gerc ? '−' : '') + sayi(gerc), 'gün', alt,
-          gerc ? 'var(--red)' : '', "izinDokum('"+p.id+"')", 'raporlu');
+        const toplam = b.yilToplamKullanim;               // planlanan dahil toplam (planlananlar da kullanılan sayılır)
+        const gerc = toplam - b.planlanan;                // gerçekleşen (fiilen kullanılan)
+        const oncekiIp = b.oncekiKullanim ? sayi(b.oncekiKullanim)+' günü dönem başı rakamına dahil' : '';
+        let alt;
+        if(!toplam){
+          alt = oncekiIp || 'Henüz izin kullanılmadı';
+        } else {
+          alt = '<span'+(oncekiIp?' title="'+esc(oncekiIp)+'"':'')+'>Kullanılan <b>'+sayi(gerc)+'</b></span>'
+              + ' · <span style="color:var(--bekle)">Planlanan <b>'+sayi(b.planlanan)+'</b></span>';
+          alt += '<br><span class="hint">'
+              + (b.planlanan ? 'Planlanan izinler revize edilebilir' : (oncekiIp || 'Planlanan izin yok'))
+              + '</span>';
+        }
+        return stat('Kullanılan', (toplam ? '−' : '') + sayi(toplam), 'gün', alt,
+          toplam ? 'var(--red)' : '', "izinDokum('"+p.id+"')", 'raporlu');
       })()
     + stat('Güncel kalan izin hakkı', sayi(b.kalan), 'gün',
         S.yil === new Date().getFullYear() ? 'Bugün kullanılabilir' : S.yil+' içinde kullanılabilir')
@@ -2601,7 +2618,24 @@ function vIzinlerim(){
   else h += '<div class="twpair kartli">'+ustCubuk()+'<div class="tw"><table class="ptbl"><thead><tr>'
     + '<th>Tür</th><th>Tarih aralığı</th><th>İşe başlama</th><th class="num">Gün</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
     + liste.map(i => izinSatiri(i,false)).join('') + '</tbody></table></div></div>';
-  h += '</div></div>';
+  h += '</div>';   // .bd.flush kapanır
+
+  // Yönetici işlemleri (revize / ret) — derli toplu, tek satır
+  if(bildirimler.length) h += '<div class="bd" style="border-top:1px solid var(--line)">'
+    + '<div class="hint" style="margin-bottom:4px">Yönetici işlemleri</div>'
+    + bildirimler.map(({i, ret}) =>
+        '<div class="row" style="justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)">'
+        + '<div style="display:flex;align-items:center;gap:9px;min-width:0;flex-wrap:wrap">'
+          + '<span class="tag '+(ret?'r':'b')+'"><i class="dot"></i>'+(ret?'Reddedildi':'Revize edildi')+'</span>'
+          + '<span style="font-size:13px">'+esc(turBul(i.tur).ad)+' · '+trTarih(i.bas)+' – '+trTarih(i.bit)+' · '+izinSuresiYazi(i)+'</span>'
+        + '</div>'
+        + '<div style="white-space:nowrap;display:flex;gap:6px">'
+          + '<button class="btn sm" onclick="izinDetay(\''+i.id+'\')">Detay</button>'
+          + '<button class="btn sm" onclick="'+(ret?'izinRedGordum':'izinRevizeGordum')+'(\''+i.id+'\')">Gördüm</button>'
+        + '</div></div>').join('')
+    + '</div>';
+
+  h += '</div>';   // .card kapanır
   return h;
 }
 
@@ -3298,12 +3332,19 @@ function gecmisHtml(g){
   const etiket = k => k === 'Onaylandı' ? '<span class="tag o"><i class="dot"></i>Onaylandı</span>'
                     : k === 'Reddedildi' ? '<span class="tag r"><i class="dot"></i>Reddedildi</span>'
                     : '<span class="tag b"><i class="dot"></i>'+esc(k)+'</span>';
+  const detay = x => (x.eski && x.yeni)
+      ? '<div style="width:100%;margin-top:4px;font-size:12.5px;line-height:1.5">'
+        + '<div style="color:var(--ink2)"><b style="display:inline-block;min-width:52px;font-weight:600">Neydi</b>'+esc(x.eski)+'</div>'
+        + '<div><b style="display:inline-block;min-width:52px;font-weight:600;color:var(--brand)">Ne oldu</b><b>'+esc(x.yeni)+'</b></div>'
+        + (x.gerekce ? '<div class="hint" style="margin-top:3px">Gerekçe: '+esc(x.gerekce)+'</div>' : '')
+        + '</div>'
+      : (x.not ? '<div class="hint" style="width:100%">'+esc(x.not)+'</div>' : '');
   return g.map(x => '<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line2)">'
     + '<span class="pill">'+esc(x.rol)+'</span>'
     + '<span style="font-weight:600">'+esc(x.kisi)+'</span>'
     + etiket(x.karar)
     + '<span class="hint mono" style="margin-left:auto">'+trTarih(x.tarih)+'</span>'
-    + (x.not ? '<div class="hint" style="width:100%">'+esc(x.not)+'</div>' : '') + '</div>').join('');
+    + detay(x) + '</div>').join('');
 }
 
 function izinDetay(id){
@@ -3432,6 +3473,12 @@ function izinKarar(id, onay){
   i.gecmis.push({rol, kisi:adSoyad(S.aktifId), karar:onay?'Onaylandı':'Reddedildi', tarih:bugun(), not:notu});
   const iptalTalebi = i.durum === 'iptal_bekliyor';
   i.durum = iptalTalebi ? (onay ? 'iptal' : 'onaylandi') : (onay ? 'onaylandi' : 'reddedildi');
+  if(!iptalTalebi && !onay){          // izin talebi reddedildi → sahibi ana ekranında net görsün
+    i.redGoruldu = false;
+    i.redEden = adSoyad(S.aktifId);
+    i.redTarih = bugun();
+    i.redNot = notu;
+  }
   const kisi = S.kayitKisi;
   kaydet();
   if(kisi){ S.kayitKisi = kisi; kisiKayitlariCiz(); } else modalKapat();
@@ -3528,12 +3575,20 @@ function izinRevizeAc(id){
   + '<div class="hint">'+esc(adSoyad(i.pid))+'</div>'
   + '<div id="rv_kiyas" class="mt"></div>'
   + '<div class="grid g2 mt">'
-  + '<div class="fld"><label class="lb">İzin türü</label><select id="rv_tur" onchange="revizeHesapla()">'
+  + '<div class="fld"><label class="lb">İzin türü</label><select id="rv_tur" onchange="revizeTurDegisti()">'
   + S.ayar.izinTurleri.map(t=>'<option value="'+t.kod+'"'+(t.kod===i.tur?' selected':'')+'>'+esc(t.ad)+'</option>').join('')
-  + '</select></div><div></div>'
-  + tarihFld('Yeni başlangıç','rv_bas',i.bas,'revizeHesapla()')
-  + tarihFld('Yeni bitiş','rv_bit',i.bit,'revizeHesapla()')
+  + '</select></div>'
+  + '<div class="fld"><label class="lb">Yeni tarih</label>'
+    + '<button type="button" class="tarihsec" id="rv_tarihbtn" onclick="revizeTakvimAc(\'rv_bas\')">'
+    + '<span id="rv_tarihyazi">Takvimden seçin</span>'
+    + '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">'
+    + '<rect x="1.5" y="3" width="13" height="11.5" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.3"/>'
+    + '<path d="M1.5 6.5h13M5 1.5v3M11 1.5v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>'
+    + '</svg></button></div>'
   + '</div>'
+  + '<input type="hidden" id="rv_bas" value="'+esc(isoToTr(i.bas))+'">'
+  + '<input type="hidden" id="rv_bit" value="'+esc(isoToTr(i.bit))+'">'
+  + '<div id="rv_takvim"></div>'
   + '<div id="rv_ozet" class="mt"></div>'
   + '<div class="fld mt"><label class="lb">Revize gerekçesi</label>'
   + '<textarea id="rv_not" placeholder="Değişikliğin nedenini yazın; yöneticiniz bunu görecek."></textarea></div>'
@@ -3541,11 +3596,122 @@ function izinRevizeAc(id){
       'Bu izin onaylanmış durumda. Kaydedince talep yeniden yönetici onayına düşer ve eski hâli kayıtlarda saklanır.') : '')
   + '</div><div class="mf"><button class="btn" onclick="modalKapat()">Vazgeç</button>'
   + '<button class="btn pri" onclick="izinRevizeKaydet(\''+id+'\')">Revizeyi gönder</button></div>');
+  S.revAcik = '';
+  S.revYil = yilSinirla(d(i.bas).getFullYear());
+  S.revAy  = d(i.bas).getMonth();
   revizeHesapla();
+}
+
+/* ---- Revize modalı: izin talebindeki gibi tıkla-seç takvim ---- */
+function revizeTurDegisti(){
+  if(saatliTur($('#rv_tur').value)){
+    const b = tarihAl('rv_bas');
+    if(b) $('#rv_bit').value = isoToTr(b);
+    if(S.revAcik === 'rv_bit') S.revAcik = 'rv_bas';
+  }
+  revizeHesapla();
+}
+function revizeTakvimAc(id){
+  if(S.revAcik === id){ S.revAcik = ''; revizeTakvimCiz(); return; }
+  S.revAcik = id;
+  const mevcut = tarihAl(id) || tarihAl('rv_bas') || bugun();
+  S.revYil = yilSinirla(d(mevcut).getFullYear());
+  S.revAy  = d(mevcut).getMonth();
+  revizeTakvimCiz();
+}
+function revizeTakvimKapat(){ S.revAcik = ''; revizeTakvimCiz(); }
+function revizeAyDegis(n){
+  let ay = (S.revAy || 0) + n, yil = S.revYil || new Date().getFullYear();
+  while(ay < 0){ ay += 12; yil--; }
+  while(ay > 11){ ay -= 12; yil++; }
+  if(yil < ilkYil()){ yil = ilkYil(); ay = 0; }
+  S.revAy = ay; S.revYil = yil;
+  revizeTakvimCiz();
+}
+function revizeGunSec(t){
+  const pid = S.revizePid;
+  if(gecmisTarihMi(t)){ bildir(trTarih(sistemBaslangic())+' tarihinden önceye izin girilemez.'); return; }
+  if(kendiCakismasi(pid, t, t, S.revizeId).length){ bildir(trTarih(t)+' tarihinde başka bir izin kaydı var.'); return; }
+
+  if(saatliTur($('#rv_tur').value)){          // saatlik izin tek gün
+    $('#rv_bas').value = isoToTr(t);
+    $('#rv_bit').value = isoToTr(t);
+    S.revAcik = '';
+    revizeHesapla();
+    return;
+  }
+  const hedef = S.revAcik || 'rv_bas';
+  const bas = tarihAl('rv_bas'), bit = tarihAl('rv_bit');
+  if(hedef === 'rv_bit'){
+    if(bas && t < bas){ bildir('Bitiş, başlangıçtan önce olamaz.'); return; }
+    if(bas && kendiCakismasi(pid, bas, t, S.revizeId).length){ bildir('Seçtiğiniz aralık başka bir izinle çakışıyor.'); return; }
+    $('#rv_bit').value = isoToTr(t);
+    S.revAcik = '';
+  } else {
+    $('#rv_bas').value = isoToTr(t);
+    if(!bit || bit < t) $('#rv_bit').value = '';
+    S.revAcik = 'rv_bit';
+  }
+  revizeHesapla();
+}
+function revizeTakvimCiz(){
+  const el = document.getElementById('rv_takvim');
+  if(!el) return;
+  if(!S.revAcik){ el.innerHTML = ''; return; }
+  const pid = S.revizePid;
+  const yil = S.revYil, ay = S.revAy;
+  const bas = tarihAl('rv_bas'), bit = tarihAl('rv_bit');
+  const gunSayisi = new Date(yil, ay + 1, 0).getDate();
+  const bosluk = (new Date(yil, ay, 1).getDay() + 6) % 7;
+  const bugunS = bugun();
+  let hucre = '';
+  for(let i = 0; i < bosluk; i++) hucre += '<div class="fb"></div>';
+  for(let g = 1; g <= gunSayisi; g++){
+    const dt = new Date(yil, ay, g), t = iso(dt);
+    const tat = tatilBul(t);
+    const we = !S.ayar.calismaGunleri.includes(dt.getDay());
+    const iz = kendiCakismasi(pid, t, t, S.revizeId)[0];
+    const gecmis = gecmisTarihMi(t);
+    const secilemez = !!iz || gecmis;
+    let c = 'fg';
+    if(tat) c += ' ft'; else if(we) c += ' fw';
+    if(iz) c += ' fizin';
+    if(gecmis) c += ' fpas';
+    if(bas && bit && t >= bas && t <= bit) c += ' fara';
+    if(t === bas || (t === bit && bit)) c += ' fuc';
+    if(t === bugunS) c += ' fbugun';
+    const ip = iz ? trTarih(t)+' · zaten izinli: '+turBul(iz.tur).ad+' ('+DURUM_AD[iz.durum]+')'
+      : gecmis ? trTarih(t)+' · sistem başlangıcından önce'
+      : trTarih(t)+(tat ? ' · '+tat.ad+', izinden düşmez' : we ? ' · hafta tatili, izinden düşmez' : '');
+    hucre += '<div class="'+c+'" title="'+esc(ip)+'"'
+      + (secilemez ? '' : ' onclick="revizeGunSec(\''+t+'\')"')+'>'+g+'</div>';
+  }
+  el.innerHTML = '<div class="ftak mt">'
+    + '<div class="fth"><button type="button" onclick="revizeAyDegis(-1)"'
+      + ((yil < ilkYil() || (yil === ilkYil() && ay === 0)) ? ' disabled' : '')+'>‹</button>'
+    + '<b>'+AY[ay]+' '+yil+'</b>'
+    + '<button type="button" onclick="revizeAyDegis(1)">›</button>'
+    + '<span class="hint">'+(saatliTur($('#rv_tur').value) ? 'Günü seçin'
+        : S.revAcik === 'rv_bit' ? 'Bitiş gününü seçin' : 'Başlangıç gününü seçin')+'</span>'
+    + '<button type="button" class="fkapat" title="Kapat" onclick="revizeTakvimKapat()">×</button></div>'
+    + '<div class="fgun">'+['Pt','Sa','Ça','Pe','Cu','Ct','Pa'].map(x=>'<div class="fgb">'+x+'</div>').join('')+'</div>'
+    + '<div class="fgun">'+hucre+'</div>'
+    + '<div class="fleg"><span><i class="fs fizin"></i>İzinli gün</span>'
+    + '<span><i class="fs fw"></i>Hafta tatili</span><span><i class="fs ft"></i>Resmî tatil</span></div>'
+    + '</div>';
 }
 
 function revizeHesapla(){
   const el = document.getElementById('rv_ozet'); if(!el) return;
+  // tarih düğmesi etiketi + takvim tazele
+  const tb = document.getElementById('rv_tarihyazi');
+  if(tb){
+    const b0 = tarihAl('rv_bas'), s0 = tarihAl('rv_bit');
+    tb.textContent = (b0 && s0) ? trTarih(b0)+' – '+trTarih(s0) : b0 ? trTarih(b0)+' – …' : 'Takvimden seçin';
+    const btn = document.getElementById('rv_tarihbtn');
+    if(btn){ if(b0 && s0) btn.classList.add('dolu'); else btn.classList.remove('dolu'); }
+  }
+  revizeTakvimCiz();
   const bas = tarihAl('rv_bas'), bit = tarihAl('rv_bit');
   const gun = isGunu(bas, bit);
   const donus = bit ? sonrakiIsGunu(bit) : '';
@@ -3602,19 +3768,50 @@ function izinRevizeKaydet(id){
 
   const eski = turBul(i.tur).ad + ' · ' + trTarih(i.bas) + ' – ' + trTarih(i.bit) + ' · ' + sayi(i.gun) + ' gün';
   const yeni = turBul(tur).ad + ' · ' + trTarih(bas) + ' – ' + trTarih(bit) + ' · ' + sayi(gun) + ' gün';
-  const onceki = i.durum;
+  // Revizeyi yapan, bu talebin onaylayıcısı mı? (öyleyse revize onay yerine geçer; yeniden onaya düşürmek mantıksız)
+  const onayciRevize = (per(i.pid)?.yonetici === S.aktifId) || (ikMi() && !per(i.pid)?.yonetici);
 
   i.gecmis.push({rol:'Revize', kisi:adSoyad(S.aktifId), karar:'Değiştirildi', tarih:bugun(),
-    not: eski + '  →  ' + yeni + (notu ? ' · ' + notu : '')});
+    eski: eski, yeni: yeni, gerekce: notu,
+    not: eski + '  →  ' + yeni + (notu ? ' · ' + notu : '')});   // not: eski render'lar için korunur
   i.tur = tur; i.bas = bas; i.bit = bit; i.gun = gun;
-  i.durum = 'yonetici_bekliyor';
   i.revizeNot = notu;
+  i.revizeEden = adSoyad(S.aktifId);
+  i.revizeTarih = bugun();
+
+  if(onayciRevize){
+    i.durum = 'onaylandi';          // revizeyi yapan onaylayıcı; ayrıca onay satırı eklenmez (revize kaydı yeterli)
+    i.revizeliOnay = true;          // talep sahibi "revize edilip onaylandı" bilgisini net görsün
+    i.revizeGoruldu = false;        // sahibi görene kadar bilgilendirme kalsın
+  } else {
+    i.durum = 'yonetici_bekliyor';  // talep sahibinin kendi revizesi → yönetici onayına düşer
+    i.revizeliOnay = false;
+  }
 
   const kisi = S.revizeKisi;
   S.kayitKisi = kisi || null; S.revizeKisi = null;
   kaydet();
   if(kisi) kisiKayitlariCiz(); else modalKapat();
-  bildir(onceki === 'onaylandi' ? 'Revize kaydedildi, yeniden yönetici onayına düştü.' : 'Talep güncellendi.');
+  bildir(onayciRevize ? 'Revize kaydedildi ve onaylandı. Talep sahibi revize edildiğini görecek.'
+                      : 'Revize kaydedildi, yönetici onayına düştü.');
+}
+
+/* Talep sahibi revize bilgilendirmesini gördü → ana ekrandan kaldır (kayıt geçmişi kalır) */
+function izinRevizeGordum(id){
+  const i = S.izin.find(x=>x.id===id); if(!i) return;
+  if(i.pid !== S.aktifId){ bildir('Bu bildirimi yalnızca talep sahibi kapatabilir.'); return; }
+  i.revizeGoruldu = true;
+  kaydet();
+  ciz();
+}
+
+/* Talep sahibi ret bilgilendirmesini gördü → ana ekrandan kaldır (kayıt geçmişi kalır) */
+function izinRedGordum(id){
+  const i = S.izin.find(x=>x.id===id); if(!i) return;
+  if(i.pid !== S.aktifId){ bildir('Bu bildirimi yalnızca talep sahibi kapatabilir.'); return; }
+  i.redGoruldu = true;
+  kaydet();
+  ciz();
 }
 
 function mesaiDetay(id){
@@ -3739,6 +3936,7 @@ function mesaiRevizeKaydet(id){
   const onceki = m.durum;
 
   m.gecmis.push({rol:'Revize', kisi:adSoyad(S.aktifId), karar:'Değiştirildi', tarih:bugun(),
+    eski: eski, yeni: yeni, gerekce: notu,
     not: eski + '  →  ' + yeni + ' · ' + notu});
   m.tarih = tarih; m.bas = bas; m.bit = bit; m.sure = sure; m.tur = tur; m.karsilik = kar;
   m.durum = 'yonetici_bekliyor';
