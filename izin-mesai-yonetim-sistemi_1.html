@@ -163,6 +163,9 @@ select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml
 .aysec button:hover{border-color:var(--brand); color:var(--brand)}
 .aysec button.on{background:var(--brand); border-color:var(--brand); color:#fff}
 .aysec button.ayb2{margin-left:6px; border-style:dashed}
+/* İzin raporu filtreleri: üç çoklu-seçim menüsü yan yana */
+.mselgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px}
+@media(max-width:640px){ .mselgrid{grid-template-columns:1fr} }
 /* mesai formundaki tür + tutar kutusu */
 .ptbl tr.dip td{border-top:2px solid var(--line); background:var(--surface2); padding-top:11px; padding-bottom:11px}
 .ptbl tr.dip b{font-family:'Archivo'; font-size:14px}
@@ -688,6 +691,11 @@ tbody tr.dgrup td{border-bottom:1px solid var(--line)}
   /* ---- tablolar kart olur ---- */
   .ptbl thead{display:none}
   .ptbl, .ptbl tbody, .ptbl tr.kart, .ptbl tr.kart td{display:block; width:auto}
+  /* açılır detay/hikâye satırı kart modunda: üstteki kartın devamı gibi, etiketsiz */
+  .ptbl tr.detaysatir, .ptbl tr.detaysatir td{display:block; width:auto}
+  .ptbl tr.detaysatir{margin:-6px 0 9px}
+  .ptbl tr.detaysatir td{border:1px solid var(--line); border-top:0; border-radius:0 0 11px 11px}
+  .ptbl tr.detaysatir td::before{display:none}
   .ptbl tr.kart{border:1px solid var(--line); border-radius:11px; padding:11px 12px; margin:0 0 9px;
     background:var(--surface); box-shadow:0 1px 2px rgba(20,40,36,.05)}
   .ptbl tr.kart td{border:0; padding:3px 0; display:flex; align-items:baseline; gap:9px; text-align:left!important}
@@ -2276,6 +2284,28 @@ function cokSecici(anahtar, secenekler, secili, degisFn){
 }
 
 
+/* Sütun başlığı içinde çoklu seçim: başlık metni tıklanınca dropdown açılır */
+function baslikSecici(anahtar, etiket, secenekler, secili, fn){
+  const acik = S.acikSecici === anahtar;
+  const et = !secili.length ? etiket : secili.length === 1 ? secili[0] : etiket+' · '+secili.length;
+  return '<div class="coksec">'
+    + '<button type="button" class="basliksec cokbtn'+(secili.length?' dolu':'')+'"'
+    + ' title="'+esc(secili.length ? secili.join(', ') : etiket)+'"'
+    + ' onclick="event.stopPropagation();seciciAc(\''+anahtar+'\')">'
+    + '<span>'+esc(et)+'</span><i>▾</i></button>'
+    + (acik
+      ? '<div class="cokpan" onclick="event.stopPropagation()">'
+        + '<div class="cokust"><b>'+(secili.length || 'Tüm')+' '+(secili.length ? 'seçili' : 'kayıtlar')+'</b>'
+        + '<button type="button" onclick="'+fn+'(null)">Temizle</button>'
+        + '<button type="button" onclick="seciciKapat()">Kapat</button></div>'
+        + '<div class="coklist">'
+        + secenekler.map((x,i) => '<label><input type="checkbox" '+(secili.includes(x)?'checked':'')
+            + ' onchange="'+fn+'('+i+')"><span>'+esc(x)+'</span></label>').join('')
+        + '</div></div>'
+      : '')
+    + '</div>';
+}
+
 /* ===================== MOBİL: TABLOLARI KARTA ÇEVİR =====================
    Her .ptbl tablosunun başlık metinlerini satır hücrelerine etiket olarak yazar.
    Kart görünümü CSS ile yalnızca dar ekranda devreye girer. */
@@ -2293,6 +2323,7 @@ function tabloEtiketle(){
       return t ? t.textContent.trim() : '';
     });
     for(const satir of tablo.querySelectorAll('tbody tr')){
+      if(satir.classList.contains('detaysatir')) continue;   // açılır detay/hikâye satırı: kart/etiket uygulanmaz
       satir.classList.add('kart');
       [...satir.children].forEach((td, i) => {
         if(!td.getAttribute('data-e')){
@@ -2316,8 +2347,7 @@ const SAYFALAR = [
   {k:'mesailerim',ad:'Mesailerim',       ic:'◷', grup:'Kendim', kosul: () => mesaiAcik(S.aktifId)},
   {k:'onay',      ad:'Bekleyen onaylar', ic:'✓', grup:'Kendim', yonetici:true},
   {k:'takvim',    ad:'İzin takvimi',     ic:'▦', grup:'Raporlar'},
-  {k:'izinde',    ad:'Kimler izinde',    ic:'☺', grup:'Raporlar'},
-  {k:'liste',     ad:'İzinli personel',  ic:'☷', grup:'Raporlar'},
+  {k:'izinde',    ad:'İzin raporu',      ic:'☷', grup:'Raporlar'},
   {k:'rapor',     ad:'İzin hakları',     ic:'▥', grup:'Raporlar', yonetici:true},
   {k:'mesailiste',ad:'Mesai listesi',    ic:'◴', grup:'Raporlar', yonetici:true},
   {k:'personel',  ad:'Personel kartları',ic:'⛁', grup:'Yönetim', ik:true},
@@ -2505,11 +2535,29 @@ function izinSatiri(i, yonetimGorunumu){
   if(izinKararVerebilir(i))
     ops += '<button class="btn sm ok" onclick="izinKarar(\''+i.id+'\',true)">Onayla</button> '
          + '<button class="btn sm no" onclick="izinRedAc(\''+i.id+'\')">Reddet</button> ';
-  if(i.durum === 'yonetici_bekliyor' && i.pid === S.aktifId) ops += '<button class="btn sm" onclick="izinIptal(\''+i.id+'\')">Geri çek</button> ';
-  if(izinRevizeEdilebilir(i)) ops += '<button class="btn sm" onclick="izinRevizeAc(\''+i.id+'\')">Revize</button> ';
-  if(izinIptalTalebi(i)) ops += '<button class="btn sm no" onclick="izinIptal(\''+i.id+'\')">İptal talebi</button> ';
-  if(izinSilinebilir(i)) ops += '<button class="btn sm no" onclick="izinSil(\''+i.id+'\')">Sil</button> ';
+  // Revize yalnızca talep sahibine (personel) gösterilir; onaylayan yönetici görmez.
+  // Geri çekme/iptal Revize ekranının içinde (ayrı buton yok). Sil butonu yok.
+  if(izinRevizeEdilebilir(i) && i.pid === S.aktifId) ops += '<button class="btn sm" onclick="izinRevizeAc(\''+i.id+'\')">Revize</button> ';
   ops += '<button class="btn sm" onclick="izinDetay(\''+i.id+'\')">Detay</button>';
+
+  // Revize geçmişi varsa: talebin altında "Neydi / Ne oldu" hikâyesi
+  const revizeler = (i.gecmis||[]).filter(g => g.rol === 'Revize' && g.eski && g.yeni);
+  let hikaye = '';
+  if(revizeler.length){
+    hikaye = '<tr class="detaysatir"><td colspan="'+(yonetimGorunumu ? 7 : 6)+'">'
+      + '<div style="padding:9px 13px;font-size:12.5px;line-height:1.55">'
+      + '<div class="hint" style="margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Revize geçmişi</div>'
+      + revizeler.map(r =>
+          '<div style="padding:4px 0;border-top:1px solid var(--line2)">'
+          + '<div style="color:var(--ink2)"><b style="display:inline-block;min-width:56px;font-weight:600">Neydi</b>'+esc(r.eski)+'</div>'
+          + '<div><b style="display:inline-block;min-width:56px;font-weight:600;color:var(--brand)">Ne oldu</b><b>'+esc(r.yeni)+'</b></div>'
+          + '<div class="hint" style="margin-left:56px;margin-top:1px">'
+            + (r.gerekce ? esc(r.gerekce)+' · ' : '') + esc(r.kisi||'') + ' · ' + trTarih(r.tarih)
+          + '</div></div>'
+        ).join('')
+      + '</div></td></tr>';
+  }
+
   return '<tr class="kart">'
     + (yonetimGorunumu ? '<td data-e="Personel"><div style="font-weight:600">'+esc(adSoyad(i.pid))+'</div><div class="hint">'+esc(p?p.dept:'')+'</div></td>' : '')
     + '<td data-e="Tür" class="bas"><span class="tag n" style="border-color:'+t.renk+'55;color:'+t.renk+'"><i class="dot"></i>'+esc(t.ad)+'</span></td>'
@@ -2527,7 +2575,7 @@ function izinSatiri(i, yonetimGorunumu){
       + (i.revizeliOnay ? ' <span class="pill" style="background:var(--bekle-soft);border-color:var(--bekle-line);color:var(--bekle)" title="'+esc((i.revizeEden||'Yönetici')+' tarafından revize edildi'+(i.revizeNot?': '+i.revizeNot:''))+'">Revize edildi</span>' : '')
       + (izinBakiyeOncesi(i) ? ' <span class="pill" title="Bakiye tarihinden önce — girdiğiniz bakiyenin içinde sayılır">Bakiyede</span>' : '')
       + '</td>'
-    + '<td class="str islem">'+ops+'</td></tr>';
+    + '<td class="str islem">'+ops+'</td></tr>' + hikaye;
 }
 
 /* Listelerdeki ay süzgeci — birden çok ay seçilebilir; boş liste = tüm yıl */
@@ -3211,16 +3259,23 @@ function izinKaydet(){
   }
   const grupNot = ihlal.length ? grupNotMetni(ihlal) : '';
   const yonetici = per(pid)?.yonetici;
-  const ilkDurum = 'yonetici_bekliyor';
+  // Talebi giren bu kişinin onaylayıcısı ise (kendisi değil) doğrudan onaylanır; aksi halde onaya düşer.
+  const onayciGirdi = pid !== S.aktifId && (yonetici === S.aktifId || (ikMi() && !yonetici));
+  const ilkDurum = onayciGirdi ? 'onaylandi' : 'yonetici_bekliyor';
+  const gecmis = onayciGirdi
+    ? [{rol:'Yönetici', kisi:adSoyad(S.aktifId), karar:'Onaylandı', tarih:bugun(), not:'Personel adına yönetici tarafından girildi ve onaylandı'}]
+    : [];
   S.izin.push({id:yeniId('i'), pid, tur, bas, bit, gun,
     saatBas:sbas, saatBit:sbit, saat,
     aciklama:$('#f_ack').value.trim(),
-    durum:ilkDurum, olusturma:bugun(), gecmis:[], grupNot, grupGerekce:gerekce});
+    durum:ilkDurum, olusturma:bugun(), gecmis, grupNot, grupGerekce:gerekce});
   S.gerekceTaslak = '';
   kaydet(); modalKapat();
-  bildir((saatli ? sayi(saat)+' saatlik izin talebi gönderildi. ' : 'İzin talebi gönderildi. ')
-    + (yonetici ? adSoyad(yonetici)+' onayına düştü.' : 'İK onayına düştü.')
-    + (grupNot ? ' Kural aşımı' + (gerekce ? ' ve gerekçeniz' : '') + ' onay ekranında görünecek.' : ''));
+  bildir(onayciGirdi
+    ? adSoyad(pid)+' için izin girildi ve onaylandı.'
+    : (saatli ? sayi(saat)+' saatlik izin talebi gönderildi. ' : 'İzin talebi gönderildi. ')
+      + (yonetici ? adSoyad(yonetici)+' onayına düştü.' : 'İK onayına düştü.')
+      + (grupNot ? ' Kural aşımı' + (gerekce ? ' ve gerekçeniz' : '') + ' onay ekranında görünecek.' : ''));
 }
 
 /* --- Mesai --- */
@@ -3347,6 +3402,38 @@ function gecmisHtml(g){
     + detay(x) + '</div>').join('');
 }
 
+/* Onay verirken: talebin tarih aralığında departmanda kim izinli, kim çalışıyor */
+function departmanDurumuHtml(i){
+  const p = per(i.pid); if(!p) return '';
+  const uyeler = S.personel.filter(x => x.aktif && x.dept === p.dept);
+  const cak = cakisan(i.pid, i.bas, i.bit, i.id);        // aynı departman, o aralıkta izinli/bekleyen
+  const izinliMap = {};
+  cak.forEach(c => { if(!izinliMap[c.pid]) izinliMap[c.pid] = c; });
+  const izinliler = [], calisanlar = [];
+  for(const u of uyeler){
+    if(u.id === i.pid) continue;                          // talep sahibi ayrıca gösterilir
+    (izinliMap[u.id] ? izinliler : calisanlar).push(u);
+  }
+  const toplamUye = uyeler.length, toplamIzinli = izinliler.length + 1;   // +1: talep sahibi
+  const izsatir = (adHtml, iz) => '<div style="padding:3px 0;font-size:12.5px">'+adHtml
+    + (iz ? ' <span class="hint">· '+esc(turBul(iz.tur).ad)+' · '+trTarih(iz.bas)+' – '+trTarih(iz.bit)
+            + (BEKLEYEN.includes(iz.durum) ? ' · onay bekliyor' : '') + '</span>' : '') + '</div>';
+  const izinliListe = izsatir('<b>'+esc(adSoyad(i.pid))+'</b> <span class="hint">· bu talep</span>',
+                              {tur:i.tur, bas:i.bas, bit:i.bit, durum:'onaylandi'})
+    + izinliler.map(u => izsatir('<b>'+esc(adSoyad(u.id))+'</b>', izinliMap[u.id])).join('');
+  const calisanListe = calisanlar.length
+    ? '<div style="font-size:12.5px;line-height:1.6">'+calisanlar.map(u => esc(adSoyad(u.id))).join(' · ')+'</div>'
+    : '<div class="hint" style="font-size:12.5px">Bu tarihlerde çalışacak başka kimse yok</div>';
+  return '<div class="sep"></div>'
+    + '<div class="lb">Departman durumu · '+esc(p.dept)+' · '+trTarih(i.bas)+' – '+trTarih(i.bit)+'</div>'
+    + '<div class="mt" style="display:flex;gap:12px;flex-wrap:wrap">'
+    + '<div style="flex:1;min-width:190px;border:1px solid var(--bekle-line);background:var(--bekle-soft);border-radius:10px;padding:10px 12px">'
+      + '<div class="lb" style="color:var(--bekle);margin-bottom:5px">İzinde olacak · '+toplamIzinli+' / '+toplamUye+'</div>'+izinliListe+'</div>'
+    + '<div style="flex:1;min-width:190px;border:1px solid var(--line);background:var(--surface2);border-radius:10px;padding:10px 12px">'
+      + '<div class="lb" style="color:var(--brand);margin-bottom:5px">Çalışacak · '+calisanlar.length+' / '+toplamUye+'</div>'+calisanListe+'</div>'
+    + '</div>';
+}
+
 function izinDetay(id){
   const i = S.izin.find(x=>x.id===id); if(!i) return;
   if(!gorebilir(i.pid)){ bildir('Bu kaydı görme yetkiniz yok.'); return; }
@@ -3379,10 +3466,8 @@ function izinDetay(id){
   + '<tr class="vurgu"><th>Talep sonrası kalan</th><td><b>'+sayi(b.kalan)+' gün</b></td></tr>'
   + '<tr><th>Açıklama</th><td>'+(i.aciklama ? esc(i.aciklama) : '<span class="hint">Belirtilmemiş</span>')+'</td></tr>'
   + '</table>'
-  + (izinBakiyeOncesi(i) ? kutu('b','Bakiye tarihinden önce',
-      'Bu izin '+trTarih(bakiyeTarihi(i.pid))+' tarihinden önce başladığı için bakiyeden ayrıca düşülmez; '
-      + 'girilen başlangıç bakiyesinin içinde sayılır. Silinirse bakiye değişmez.') : '')
-  + (cak.length ? kutu('b','Aynı departmanda çakışma', cak.map(c=>esc(adSoyad(c.pid))+' ('+trTarih(c.bas)+' – '+trTarih(c.bit)+')').join(', ')) : '')
+  + (kararVerebilir ? departmanDurumuHtml(i)
+      : (cak.length ? kutu('b','Aynı departmanda çakışma', cak.map(c=>esc(adSoyad(c.pid))+' ('+trTarih(c.bas)+' – '+trTarih(c.bit)+')').join(', ')) : ''))
   + (ihlal.length || i.grupNot ? kutu('b','Yedeklilik kuralı aşılıyor',
       (ihlal.length ? grupIhlalMetni(ihlal) : '<div class="hint">'+esc(i.grupNot)+'</div>')
       + (i.grupGerekce
@@ -3398,10 +3483,8 @@ function izinDetay(id){
   + (kararVerebilir ? '<div class="fld mt"><label class="lb">Karar notu (isteğe bağlı)</label><input type="text" id="k_not" placeholder="Örn. Ekip yoğunluğu nedeniyle…"></div>' : '')
   + '</div>'
   + '<div class="mf">'
-  + (izinSilinebilir(i) ? '<button class="btn no" style="margin-right:auto" onclick="izinSil(\''+id+'\')"'
-      +'>Kaydı sil</button>' : '')
   + '<button class="btn" onclick="modalKapat()">Kapat</button>'
-  + (izinRevizeEdilebilir(i) ? '<button class="btn" onclick="izinRevizeAc(\''+id+'\')">Revize et</button>' : '')
+  + (izinRevizeEdilebilir(i) && i.pid === S.aktifId ? '<button class="btn" onclick="izinRevizeAc(\''+id+'\')">Revize et</button>' : '')
   + (kararVerebilir ? '<button class="btn no" onclick="izinKarar(\''+id+'\',false)">Reddet</button>'
       + '<button class="btn ok" onclick="izinKarar(\''+id+'\',true)">Onayla</button>' : '')
   + '</div>');
@@ -3594,7 +3677,10 @@ function izinRevizeAc(id){
   + '<textarea id="rv_not" placeholder="Değişikliğin nedenini yazın; yöneticiniz bunu görecek."></textarea></div>'
   + (i.durum === 'onaylandi' ? kutu('b','Yeniden onaya gidecek',
       'Bu izin onaylanmış durumda. Kaydedince talep yeniden yönetici onayına düşer ve eski hâli kayıtlarda saklanır.') : '')
-  + '</div><div class="mf"><button class="btn" onclick="modalKapat()">Vazgeç</button>'
+  + '</div><div class="mf">'
+  + '<button class="btn no" style="margin-right:auto" onclick="izinIptal(\''+id+'\')">'
+    + (i.durum === 'onaylandi' ? 'İzni geri çek (onaya gider)' : 'Talebi geri çek')+'</button>'
+  + '<button class="btn" onclick="modalKapat()">Vazgeç</button>'
   + '<button class="btn pri" onclick="izinRevizeKaydet(\''+id+'\')">Revizeyi gönder</button></div>');
   S.revAcik = '';
   S.revYil = yilSinirla(d(i.bas).getFullYear());
@@ -4438,7 +4524,7 @@ function dogumGunuTarihi(pid, yil){
 }
 
 function izinGirebilir(pid){
-  return pid === S.aktifId || ikMi();
+  return pid === S.aktifId || ikMi() || per(pid)?.yonetici === S.aktifId;
 }
 
 
@@ -5510,9 +5596,13 @@ function izindeAcCiz(){
 }
 function izindeKapat(){ S.izindeModal = false; modalKapat(); }
 
-/* Bugün izinde olanlar */
-function izindeSatirlar(){
-  const bg = bugun();
+/* Seçili tarihte (varsayılan bugün) izinde olanlar */
+function izindeHedef(){ return S.izindeTarih || bugun(); }
+function izindeGunKaydir(n){ const dt = d(izindeHedef()); dt.setDate(dt.getDate()+n); S.izindeTarih = iso(dt); ciz(); }
+function izindeAyKaydir(n){ const dt = d(izindeHedef()); dt.setMonth(dt.getMonth()+n); S.izindeTarih = iso(dt); ciz(); }
+function izindeBugune(){ S.izindeTarih = null; ciz(); }
+function izindeSatirlar(hedef){
+  const bg = hedef || bugun();
   const kisiId = new Set(S.personel.filter(p => p.aktif
       && (!izindeDept || p.dept === izindeDept)
       && (!izindeLok || (p.lokasyon || '') === izindeLok)).map(p => p.id));
@@ -5541,45 +5631,69 @@ function izindeKisiSayisi(){
 }
 
 function vIzinde(){
-  const satirlar = izindeSatirlar();
   const kapsam = S.personel.filter(p => p.aktif);
   const depts = [...new Set(kapsam.map(p => p.dept))].sort((a,b) => a.localeCompare(b,'tr'));
-  const loks = [...new Set(kapsam.map(p => p.lokasyon || '').filter(Boolean))].sort((a,b) => a.localeCompare(b,'tr'));
-  const filtreVar = izindeDept || izindeLok;
+  const loks  = [...new Set(kapsam.map(p => p.lokasyon || '').filter(Boolean))].sort((a,b) => a.localeCompare(b,'tr'));
+  const seciliAy   = S.raporAy   || (S.raporAy = []);
+  const seciliDept = S.raporDept || (S.raporDept = []);
+  const seciliLok  = S.raporLok  || (S.raporLok = []);
+  const aktifId = new Set(kapsam.map(p => p.id));
 
-  let h = '<h1 style="font-size:20px;margin-bottom:4px">Kimler izinde</h1>'
-    + '<div class="hint" style="margin-bottom:12px">'+trTarih(bugun())+' itibarıyla · '
-    + satirlar.length+' kişi izinde</div>';
+  // Kapsam: seçili ay(lar) × seçili departman(lar). Boş = hepsi (tüm yıl / tüm departman).
+  const aylar = seciliAy.length ? seciliAy : [...Array(12).keys()];
+  const ayKapsam = i => aylar.some(m => {
+    const ms = iso(new Date(S.yil, m, 1)), me = iso(new Date(S.yil, m + 1, 0));
+    return i.bas <= me && i.bit >= ms;
+  });
+  const satirlar = S.izin.filter(i =>
+        aktifId.has(i.pid)
+        && (GECERLI.includes(i.durum) || BEKLEYEN.includes(i.durum))
+        && (!seciliDept.length || seciliDept.includes(per(i.pid)?.dept))
+        && (!seciliLok.length || seciliLok.includes(per(i.pid)?.lokasyon || ''))
+        && ayKapsam(i))
+      .sort((a,b) => a.bas.localeCompare(b.bas) || adSoyad(a.pid).localeCompare(adSoyad(b.pid),'tr'));
 
-  h += '<div class="card izindekart">'
-    + '<div class="bd" style="padding:11px 13px;border-bottom:1px solid var(--line2)">'
-    + '<div class="ikili">'
-      + '<select class="tamsat" onchange="izindeFiltre(\'dept\',this.value)"><option value="">Tüm departmanlar</option>'
-      + depts.map(x => '<option'+(x===izindeDept?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
-      + '<select class="tamsat" onchange="izindeFiltre(\'lok\',this.value)"><option value="">Tüm lokasyonlar</option>'
-      + loks.map(x => '<option'+(x===izindeLok?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
-      + (filtreVar ? '<button class="btn sm tamsat" onclick="izindeTemizle()">Filtreyi temizle</button>' : '')
-    + '</div></div>';
+  const ayEtiket = seciliAy.length ? seciliAy.slice().sort((a,b)=>a-b).map(m=>AY[m]).join(', ') : 'Tüm yıl';
+  const deptEtiket = seciliDept.length ? seciliDept.length+' departman' : 'Tüm departmanlar';
+  const lokEtiket  = seciliLok.length ? seciliLok.length+' lokasyon' : 'Tüm lokasyonlar';
+  const toplamGun = satirlar.reduce((a,i)=> a + (i.gun || 0), 0);
 
-  h += '<div class="bd flush">';
-  if(!satirlar.length) h += '<div class="empty"><div class="e1">Bugün izinde kimse yok</div>Filtreleri değiştirebilirsiniz.</div>';
-  else {
-    h += '<div class="twpair"><div class="tw"><table class="ptbl"><thead><tr>'
-      + '<th class="stl">Personel</th><th>Departman</th><th>Lokasyon</th><th>İşbaşı</th></tr></thead><tbody>';
-    for(const x of satirlar){
-      const p = per(x.i.pid) || {};
-      h += '<tr><td class="stl"><div style="font-weight:600">'+esc(adSoyad(x.i.pid))+'</div>'
-        + '<div class="hint" style="font-size:11.5px">'+esc(p.unvan||'')+'</div></td>'
-        + '<td class="hint">'+esc(p.dept||'')+'</td>'
-        + '<td class="hint">'+esc(p.lokasyon||'—')+'</td>'
-        + '<td class="mono" style="white-space:nowrap"><b>'+trTarih(x.donus)+'</b>'
-        + '<div class="hint" style="font-family:\'Inter\';font-size:11px">'+GUN_TAM[d(x.donus).getDay()]
-        + (BEKLEYEN.includes(x.i.durum) ? ' · <span class="pill">onay bekliyor</span>' : '')+'</div></td></tr>';
-    }
-    h += '</tbody></table></div></div>';
+  let h = '<h1 style="font-size:20px;margin-bottom:4px">İzin raporu</h1>'
+    + '<div class="hint" style="margin-bottom:12px">'+S.yil+' · '+esc(ayEtiket)+' · '+esc(deptEtiket)+' · '+esc(lokEtiket)
+    + ' · '+satirlar.length+' izin · '+sayi(toplamGun)+' gün</div>';
+
+  // Filtreler ayrı satır değil; Departman/Lokasyon kendi başlıklarında, Ay ise Tarih başlığında seçilir.
+  h += '<div class="card izindekart"><div class="bd flush">'
+    + '<table class="ptbl" style="width:100%;table-layout:fixed"><thead><tr>'
+      + '<th class="stl" style="width:15%">Personel</th>'
+      + '<th style="width:15%">'+baslikSecici('rapor_dept','Departman', depts, seciliDept, 'raporDeptSec')+'</th>'
+      + '<th style="width:13%">'+(loks.length ? baslikSecici('rapor_lok','Lokasyon', loks, seciliLok, 'raporLokSec') : 'Lokasyon')+'</th>'
+      + '<th style="width:16%">Tür</th>'
+      + '<th style="width:17%">'+baslikSecici('rapor_ay','Tarih', AY, seciliAy.map(ix=>AY[ix]), 'raporAySec')+'</th>'
+      + '<th class="num" style="width:6%">Gün</th><th style="width:18%">Durum</th></tr></thead><tbody>';
+  if(!satirlar.length) h += '<tr><td colspan="7"><div class="empty"><div class="e1">Seçilen kapsamda izin kaydı yok</div>Başlıklardaki Departman, Lokasyon veya Tarih menüsünden seçimi değiştirin.</div></td></tr>';
+  else for(const i of satirlar){
+    const p = per(i.pid) || {}, t = turBul(i.tur);
+    h += '<tr><td class="stl"><div style="font-weight:600">'+esc(adSoyad(i.pid))+'</div>'
+      + '<div class="hint" style="font-size:11.5px">'+esc(p.unvan||'')+'</div></td>'
+      + '<td class="hint">'+esc(p.dept||'')+'</td>'
+      + '<td class="hint">'+esc(p.lokasyon||'—')+'</td>'
+      + '<td><span class="tag n" style="border-color:'+t.renk+'55;color:'+t.renk+'"><i class="dot"></i>'+esc(t.ad)+'</span></td>'
+      + '<td class="mono" style="font-size:12.5px">'
+        + (saatliIzin(i) ? trTarih(i.bas)+' · '+i.saatBas+'–'+i.saatBit : trTarih(i.bas)+' – '+trTarih(i.bit))+'</td>'
+      + '<td class="num">'+izinSuresiYazi(i)+'</td>'
+      + '<td>'+durumTag(i.durum)+'</td></tr>';
   }
-  return h + '</div></div>';
+  h += '</tbody></table></div></div>';
+  return h;
 }
+
+/* İzin raporu filtreleri — cokSecici ile (indeksle çağrılır, null = temizle; boş = hepsi) */
+function raporDeptler(){ return [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.dept))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function raporLoklar(){ return [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.lokasyon||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function raporAySec(i){ if(i===null){ S.raporAy=[]; ciz(); return; } S.raporAy=S.raporAy||[]; const j=S.raporAy.indexOf(i); if(j<0) S.raporAy.push(i); else S.raporAy.splice(j,1); ciz(); }
+function raporDeptSec(i){ if(i===null){ S.raporDept=[]; ciz(); return; } const ad=raporDeptler()[i]; if(ad===undefined) return; S.raporDept=S.raporDept||[]; const j=S.raporDept.indexOf(ad); if(j<0) S.raporDept.push(ad); else S.raporDept.splice(j,1); ciz(); }
+function raporLokSec(i){ if(i===null){ S.raporLok=[]; ciz(); return; } const ad=raporLoklar()[i]; if(ad===undefined) return; S.raporLok=S.raporLok||[]; const j=S.raporLok.indexOf(ad); if(j<0) S.raporLok.push(ad); else S.raporLok.splice(j,1); ciz(); }
 
 
 
