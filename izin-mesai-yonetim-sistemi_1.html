@@ -1056,6 +1056,7 @@ const AYAR_VAR = {
   devirSiniri:0,                   // 0 = sınırsız devir
   yillikMesaiSiniri:270,           // saat / yıl
   minIzinBildirim:1,               // kaç gün önceden talep edilmeli
+  eksiSiniri:0,                    // izinde en çok kaç gün eksiye düşülebilir (0 = eksiye izin yok)
   izinTurleri:JSON.parse(JSON.stringify(IZIN_TURLERI_VAR)),
   mesaiTurleri:JSON.parse(JSON.stringify(MESAI_TURLERI_VAR)),
   kidem:JSON.parse(JSON.stringify(KIDEM_VAR)),
@@ -1280,7 +1281,7 @@ function isGunuDokum(bas, bit){
 /* Belirli bir tarihte doldurulmuş kıdem yılı */
 function kidemYiliTarihte(pid, tarih){
   const p = per(pid); if(!p) return 0;
-  const bas = p.kidem || p.giris;
+  const bas = p.izinKidem || p.kidem || p.giris;
   if(!bas) return 0;
   const ref = d(tarih), g = d(bas);
   let y = ref.getFullYear() - g.getFullYear();
@@ -1322,7 +1323,7 @@ function hakEdis(pid, yil){
 /* Kıdem yıldönümü: verilen yıldaki tarih */
 function yildonumu(pid, yil){
   const p = per(pid); if(!p) return '';
-  const bas = p.kidem || p.giris;
+  const bas = p.izinKidem || p.kidem || p.giris;
   if(!bas) return '';
   const g = d(bas);
   const ay = g.getMonth(), gun = g.getDate();
@@ -1339,7 +1340,7 @@ function bakiyeTarihi(pid){
 /* (bakiyeTarihi, refTarih] aralığına düşen yıldönümlerinde kazanılan günler */
 function hakEdisler(pid, refTarih){
   const p = per(pid); if(!p) return [];
-  const bas = p.kidem || p.giris;
+  const bas = p.izinKidem || p.kidem || p.giris;
   if(!bas) return [];
   const bt = bakiyeTarihi(pid);
   const liste = [];
@@ -3213,6 +3214,35 @@ function kutu(tip, baslik, metin){
   return '<div class="card mt" style="box-shadow:none;'+c+'"><div class="bd" style="padding:11px 14px"><b style="font-size:13px">'+baslik+'</b><div class="hint" style="margin-top:2px">'+metin+'</div></div></div>';
 }
 
+/* İzin bitiş tarihine kadar kazanılacak hak ediş dahil projeksiyon bakiye.
+   haricId: hariç tutulacak kayıt (revizede kendisi). ekGun: eklenmek istenen yeni izin (gün). */
+function projeksiyonBakiye(pid, bit, haricId, ekGun){
+  const p = per(pid) || {};
+  const bt = bakiyeTarihi(pid);
+  const devir = Number(p.devir || 0);
+  const gunSaat = gunlukCalismaSaati();
+  let kullanim = 0;
+  for(const i of S.izin){
+    if(i.pid !== pid || i.id === haricId) continue;
+    if(!turBul(i.tur).yillikDus) continue;
+    if(!(GECERLI.includes(i.durum) || BEKLEYEN.includes(i.durum))) continue;
+    if(i.bas < bt || i.bas > bit) continue;                 // devir öncesi ve izin bitişinden sonrası hariç
+    kullanim += saatliIzin(i) ? (i.saat || 0) / gunSaat : (i.gun || 0);
+  }
+  const kazanim = hakEdisler(pid, bit).reduce((a, x) => a + x.gun, 0);
+  return devir + kazanim - kullanim - (ekGun || 0);
+}
+/* Eksiye düşme sınırı kontrolü — geçerse null, aşarsa uyarı metni döner */
+function eksiSinirUyari(pid, tur, bit, ekGun, haricId){
+  if(!turBul(tur).yillikDus) return null;                   // yıllıktan düşmeyen türler sınırsız
+  const sinir = Math.max(0, Number(S.ayar.eksiSiniri) || 0);
+  const proj = projeksiyonBakiye(pid, bit, haricId || null, ekGun);
+  if(proj >= -sinir - 1e-9) return null;
+  return adSoyad(pid)+' için bu izin bakiyeyi '+sayi(Math.round((-proj)*10)/10)+' gün eksiye düşürüyor; '
+    + (sinir > 0 ? 'izin verilen eksi sınırı '+sayi(sinir)+' gün.' : 'eksiye izin verilmiyor.')
+    + ' (İzin bitişine kadar kazanılacak hak ediş hesaba katıldı.)';
+}
+
 function izinKaydet(){
   const pid = $('#f_pid').value, tur = $('#f_tur').value;
   const saatli = saatliTur(tur);
@@ -3256,6 +3286,8 @@ function izinKaydet(){
     bildir(adSoyad(pid)+' için '+trTarih(kendi[0].bas)+' – '+trTarih(kendi[0].bit)+' tarihlerinde kayıt var, çakışıyor.');
     return;
   }
+  const eksiUyari = eksiSinirUyari(pid, tur, bit, saatli ? (saat / gunlukCalismaSaati()) : gun, null);
+  if(eksiUyari){ bildir(eksiUyari); return; }
   const ihlal = grupIhlali(pid, bas, bit, null);
   const gerekceEl = document.getElementById('f_gerekce');
   const gerekce = gerekceEl ? gerekceEl.value.trim() : '';
@@ -3857,6 +3889,8 @@ function izinRevizeKaydet(id){
     bildir(trTarih(cak[0].bas)+' – '+trTarih(cak[0].bit)+' tarihlerindeki kayıtla çakışıyor.');
     return;
   }
+  const eksiUyari = eksiSinirUyari(i.pid, tur, bit, saatliTur(tur) ? ((i.saat||0)/gunlukCalismaSaati()) : gun, i.id);
+  if(eksiUyari){ bildir(eksiUyari); return; }
   if(!notu){ bildir('Revize gerekçesi yazın.'); return; }
 
   const eski = turBul(i.tur).ad + ' · ' + trTarih(i.bas) + ' – ' + trTarih(i.bit) + ' · ' + sayi(i.gun) + ' gün';
@@ -4726,7 +4760,9 @@ function personelForm(id){
     + S.personel.filter(x=>x.id!==id).sort((a,b)=>a.ad.localeCompare(b.ad,'tr')).map(x=>'<option value="'+x.id+'"'+(x.id===p.yonetici?' selected':'')+'>'+esc(x.ad+' '+x.soyad)+' — '+esc(x.unvan)+'</option>').join('')+'</select></div>'
 
   + bslk('Kıdem ve izin')
-  + tarihFld('Kıdem tarihi (hak ediş esası)','p_kidem',p.kidem||p.giris||'','devirOzet()')
+  + tarihFld('Kıdem tarihi','p_kidem',p.kidem||p.giris||'','izinKidemTazele()')
+  + tarihFld('İzin kıdem tarihi (hak ediş esası)','p_izinKidem',p.izinKidem||p.kidem||p.giris||'','devirOzet()',
+      '<div class="hint" style="margin-top:3px">İzin hak edişi bu tarihe göre hesaplanır.</div>')
   + tarihFld('İşe giriş tarihi','p_giris',p.giris,'cikisKontrol();devirOzet()')
   + tarihFld('İşten çıkış tarihi','p_cikis',p.cikis||'','cikisKontrol()','<div id="p_cikismsj" class="hint" style="margin-top:3px"></div>')
   + '<div class="fld"><label class="lb">Dönem başı izin hakkı (gün)</label>'
@@ -4744,7 +4780,10 @@ function personelForm(id){
   + '<div class="fld"><label class="lb">Ücret tipi</label><select id="p_ucretTipi" onchange="ucretOzet()">'
     + UCRET_TIPLERI.map(x=>'<option value="'+x[0]+'"'+(x[0]===ucretTipi(p)?' selected':'')+'>'+x[1]+'</option>').join('')
     + '</select></div>'
-  + '<div class="fld"><label class="lb" id="p_ucretLb">'+ucretTipiAd(p)+' net ücret (₺)</label>'
+  + '<div class="fld"><label class="lb">Net / Brüt</label><select id="p_netBrut">'
+    + '<option value="net"'+((p.netBrut||'net')==='net'?' selected':'')+'>Net</option>'
+    + '<option value="brut"'+(p.netBrut==='brut'?' selected':'')+'>Brüt</option></select></div>'
+  + '<div class="fld"><label class="lb" id="p_ucretLb">Ücret (₺)</label>'
   + '<input type="text" inputmode="decimal" id="p_ucret" value="'+paraYaz(p.ucret||0)+'" oninput="tutarGir(this,ucretOzet)"></div>'
   + '<div class="fld"><label class="lb">Aylık çalışma gün sayısı</label><input type="number" step="1" id="p_agun" value="'+(p.aylikGun||30)+'" oninput="ucretOzet()"></div>'
   + '<div class="full" id="p_ucretOzet"></div>'
@@ -4764,21 +4803,28 @@ function personelForm(id){
   tcKontrol(); cikisKontrol(); devirOzet(); ucretOzet();
 }
 
+/* Kıdem tarihi girilince İzin kıdem tarihi boşsa aynı değerle doldurur */
+function izinKidemTazele(){
+  const ik = document.getElementById('p_izinKidem'), kd = document.getElementById('p_kidem');
+  if(ik && kd && !tarihAl('p_izinKidem')) ik.value = kd.value;
+  devirOzet();
+}
+
 /* Bakiye ve bir sonraki hak ediş özeti */
 function devirOzet(){
   const el = document.getElementById('p_devirOzet');
   if(!el) return;
   const id = S.duzenlenenId;
-  const kidem = tarihAl('p_kidem') || tarihAl('p_giris');
-  if(!kidem){ el.innerHTML = '<div class="hint">Kıdem tarihi girilince bir sonraki hak ediş burada görünür.</div>'; return; }
+  const izinKidem = tarihAl('p_izinKidem') || tarihAl('p_kidem') || tarihAl('p_giris');
+  if(!izinKidem){ el.innerHTML = '<div class="hint">İzin kıdem tarihi girilince bir sonraki hak ediş burada görünür.</div>'; return; }
 
-  const sahte = {id:id||'__yeni__', kidem, giris:kidem,
+  const sahte = {id:id||'__yeni__', izinKidem, kidem:tarihAl('p_kidem')||izinKidem, giris:tarihAl('p_giris')||izinKidem,
                  dogum:tarihAl('p_dogum'),
                  devir:Number((document.getElementById('p_devir')||{}).value) || 0,
                  devirTarihi:tarihAl('p_devirTarihi') || bugun()};
   const gercek = id ? per(id) : null;
-  const yedek = gercek ? {kidem:gercek.kidem, giris:gercek.giris, dogum:gercek.dogum, devir:gercek.devir, devirTarihi:gercek.devirTarihi} : null;
-  if(gercek) Object.assign(gercek, {kidem:sahte.kidem, giris:sahte.giris, dogum:sahte.dogum, devir:sahte.devir, devirTarihi:sahte.devirTarihi});
+  const yedek = gercek ? {izinKidem:gercek.izinKidem, kidem:gercek.kidem, giris:gercek.giris, dogum:gercek.dogum, devir:gercek.devir, devirTarihi:gercek.devirTarihi} : null;
+  if(gercek) Object.assign(gercek, {izinKidem:sahte.izinKidem, kidem:sahte.kidem, giris:sahte.giris, dogum:sahte.dogum, devir:sahte.devir, devirTarihi:sahte.devirTarihi});
   else S.personel.push(sahte);
 
   const hedef = gercek ? id : '__yeni__';
@@ -4811,7 +4857,7 @@ function ucretOzet(){
                   aylikGun: Number(($('#p_agun')||{}).value) || 30};
 
   const lb = document.getElementById('p_ucretLb');
-  if(lb) lb.textContent = ucretTipiAd(taslak)+' net ücret (₺)';
+  if(lb) lb.textContent = 'Ücret (₺)';
 
   if(!taslak.ucret){
     el.innerHTML = '<div class="hint">Ücret girilince aylık, günlük ve saatlik karşılıkları burada görünür. '
@@ -4887,10 +4933,12 @@ function fld(l,i,t,v){ return '<div class="fld"><label class="lb">'+l+'</label><
 function personelKaydet(id){
   const o = {tcno:$('#p_tc').value.trim(), ad:$('#p_ad').value.trim(), soyad:$('#p_soyad').value.trim(),
     dept:comboDeger('p_dept'), lokasyon:comboDeger('p_lok'), unvan:comboDeger('p_unvan'),
-    kidem:tarihAl('p_kidem'), giris:tarihAl('p_giris'), cikis:tarihAl('p_cikis'),
+    kidem:tarihAl('p_kidem'), izinKidem:tarihAl('p_izinKidem')||tarihAl('p_kidem')||tarihAl('p_giris'),
+    giris:tarihAl('p_giris'), cikis:tarihAl('p_cikis'),
     devirTarihi:tarihAl('p_devirTarihi'),
     dogum:tarihAl('p_dogum'), devir:Number($('#p_devir').value)||0, email:$('#p_email').value.trim(),
     tel:$('#p_tel').value.trim(), ucret:paraCoz($('#p_ucret').value),
+    netBrut: ($('#p_netBrut')||{}).value === 'brut' ? 'brut' : 'net',
     ucretTipi: $('#p_ucretTipi').value === 'gunluk' ? 'gunluk' : 'aylik',
     aylikGun:Number($('#p_agun').value)||30,
     yonetici:$('#p_yon').value, rol:$('#p_rol').value, aktif:$('#p_aktif').checked,
@@ -6066,6 +6114,9 @@ function vAyar(){
     + '<div class="fld"><label class="lb">Haftalık çalışma süresi (saat)</label><input type="number" value="'+a.haftalikSaat+'" onchange="S.ayar.haftalikSaat=Number(this.value);kaydet()"></div>'
     + '<div class="fld"><label class="lb">Yıllık fazla çalışma sınırı (saat)</label><input type="number" value="'+a.yillikMesaiSiniri+'" onchange="S.ayar.yillikMesaiSiniri=Number(this.value);kaydet()"></div>'
     + '<div class="fld"><label class="lb">Günlük çalışma saati</label><input type="number" step="0.5" value="'+(a.gunlukSaat||7.5)+'" onchange="S.ayar.gunlukSaat=Number(this.value);kaydet()"></div>'
+    + '<div class="fld"><label class="lb">İzinde eksiye düşme sınırı (gün)</label>'
+      + '<input type="number" min="0" step="0.5" value="'+(a.eksiSiniri||0)+'" onchange="S.ayar.eksiSiniri=Math.max(0,Number(this.value)||0);kaydet()">'
+      + '<div class="hint" style="margin-top:3px">Bakiyesi yetmeyen personel en çok bu kadar gün eksiye düşebilir (0 = eksiye izin yok). İzin tarihine kadar kazanılacak hak ediş de hesaba katılır.</div></div>'
     + '<div class="fld"><label class="lb">Mesai başlangıç saati</label>'
       + '<input type="time" value="'+(a.isBaslangic||'08:30')+'" onchange="S.ayar.isBaslangic=this.value;kaydet()">'
       + '<div class="hint" style="margin-top:5px">Normal çalışmanın başladığı saat</div></div>'
@@ -6646,6 +6697,8 @@ function gocEt(){
     if(p.ucretTipi !== 'gunluk') p.ucretTipi = 'aylik';
     if(p.tcno === undefined) p.tcno = '';
     if(p.kidem === undefined) p.kidem = p.giris || '';
+    if(p.izinKidem === undefined || p.izinKidem === '') p.izinKidem = p.kidem || p.giris || '';   // izin hak edişinin esası
+    if(p.netBrut === undefined) p.netBrut = 'net';
     if(p.lokasyon === undefined) p.lokasyon = '';
     if(p.cikis === undefined) p.cikis = '';
     delete p.altDept;
@@ -6700,6 +6753,7 @@ async function baslat(){
   S.ayar.ilkYil = Number(S.ayar.ilkYil) || 2026;
   S.ayar.sistemBaslangic = S.ayar.sistemBaslangic || AYAR_VAR.sistemBaslangic;
   if(S.ayar.arifeYarim === undefined) S.ayar.arifeYarim = false;
+  if(S.ayar.eksiSiniri === undefined) S.ayar.eksiSiniri = 0;
   S.ayar.unvanDept = S.ayar.unvanDept || {};
   delete S.ayar.altUst; delete S.ayar.altDeptler; delete S.ayar.unvanAlt; delete S.ayar.ikOnayiZorunlu;
   // İK onay adımı kaldırıldı: bekleyen kayıtlar yönetici onayıyla tamamlanmış sayılır
