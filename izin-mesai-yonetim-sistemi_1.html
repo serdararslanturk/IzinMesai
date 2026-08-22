@@ -211,10 +211,22 @@ select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml
 .dtbl tr.vurgu td{background:var(--brand-soft); color:var(--brand-deep)}
 .dtbl tr.vurgu b{font-family:'Archivo'; font-size:16px}
 .dtbl.dokum{border-color:#C7DEEF; overflow:visible}   /* başlık-içi ay menüsü panelinin kırpılmaması için */
-.dtbl.dokum th{width:auto; background:#F1F7FC; color:#215C8C; text-align:left}
-.dtbl.dokum td b{color:#215C8C}
+.dtbl.dokum th{width:auto; padding:11px 15px; background:linear-gradient(180deg,#F6FAFE,#E9F3FC); color:#215C8C;
+  text-align:left; font-size:11px; font-weight:700; letter-spacing:.055em; text-transform:uppercase; border-bottom:1px solid #C7DEEF}
+.dtbl.dokum td{padding:12px 15px; font-size:13.5px; border-top:1px solid #EDF3F8; vertical-align:middle}
+.dtbl.dokum tbody tr:hover td{background:#F8FBFE}
+.dtbl.dokum td .mono{font-size:13px; color:var(--ink); letter-spacing:.01em}
+.dtbl.dokum td b{color:#215C8C; font-family:'Archivo'; font-size:15px}
 .dtbl.dokum th.num, .dtbl.dokum td.num{text-align:right}
-.dtbl.dokum tr.dip td{background:#F1F7FC; border-top:2px solid #9CC4E4}
+.dtbl.dokum td.num .pill{margin-left:8px}
+.dtbl.dokum tr.dip td{background:#EEF6FC; border-top:2px solid #9CC4E4; padding-top:12px; padding-bottom:12px}
+.dtbl.dokum tr.dip:hover td{background:#EEF6FC}
+.dtbl.dokum .cokbtn{background:#fff; border-color:#BFD8ED; color:#215C8C; font-weight:600; border-radius:7px}
+.dtbl.dokum .cokbtn.dolu{background:#EAF4FC}
+.ddot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:9px; vertical-align:middle;
+  box-shadow:0 0 0 3px rgba(20,60,90,.06)}
+.pill.bekle{background:#FFF3D4; color:#8A6A16; border-color:#EEDBA0}
+.pill.kismi{background:#EAF1F6; color:#5A7488; border-color:#D3E1EB}
 /* revize: eski – yeni karşılaştırma tablosu */
 /* kadro listesinde başlığın kendisi süzgeç */
 .basliksec{width:100%; font-family:'Archivo',sans-serif; font-weight:700; font-size:12px;
@@ -2855,7 +2867,7 @@ function izinDokumCiz(){
   modalAc('<div class="mh"><h3 class="mbaslik">KULLANIM DÖKÜMÜ</h3>'
   + '<button class="x" onclick="dokumKapat()">×</button></div><div class="mb">'
   + '<div class="row" style="margin-bottom:10px;gap:8px;align-items:center;flex-wrap:wrap">'
-    + '<span class="hint">'+esc(adSoyad(pid))+' · kullanılan ve onay bekleyen izinler</span>'
+    + '<span class="hint"><b style="color:var(--ink)">'+esc(adSoyad(pid))+'</b> · kullanılan ve onay bekleyen izinler</span>'
     + '<span class="lb" style="margin-left:auto">Yıl</span>'
     + '<select style="width:auto" onchange="dokumYilSec(this.value)">'
     + yillar.map(y => '<option value="'+y+'"'+(y===yil?' selected':'')+'>'+y+'</option>').join('')+'</select>'
@@ -2871,16 +2883,19 @@ function izinDokumCiz(){
     + '<th>Bitiş</th><th class="num">Gün</th><th></th></tr></thead><tbody>'
   + (satirlar.length
     ? satirlar.map(x => {
-          const i = x.i;
+          const i = x.i, t = turBul(i.tur);
           let ops = '<button class="btn sm" onclick="izinDetay(\''+i.id+'\')">Detay</button>';
           if(izinRevizeEdilebilir(i))
             ops += ' <button class="btn sm" onclick="izinRevizeAc(\''+i.id+'\')">Revize</button>';
           else if(izinIptalTalebi(i))
             ops += ' <button class="btn sm" onclick="izinIptalTalep(\''+i.id+'\',\'kisi\')">İptal talebi</button>';
-          return '<tr><td class="mono">'+trTarih(x.pay.bas)+(x.pay.kirpik?' <span class="pill">kısmi</span>':'')+'</td>'
-            + '<td class="mono">'+trTarih(x.pay.bit)+'</td>'
+          return '<tr>'
+            + '<td><span class="ddot" style="background:'+t.renk+'" title="'+esc(t.ad)+'"></span>'
+              + '<span class="mono">'+trTarih(x.pay.bas)+'</span>'
+              + (x.pay.kirpik?' <span class="pill kismi">kısmi</span>':'')+'</td>'
+            + '<td><span class="mono">'+trTarih(x.pay.bit)+'</span></td>'
             + '<td class="num"><b>'+(saatliIzin(i) ? sayi(i.saat)+' sa' : sayi(x.pay.gun))+'</b>'
-            + (BEKLEYEN.includes(i.durum) ? ' <span class="pill">bekliyor</span>' : '')+'</td>'
+            + (BEKLEYEN.includes(i.durum) ? '<span class="pill bekle">bekliyor</span>' : '')+'</td>'
             + '<td class="str dokumislem">'+ops+'</td></tr>';
         }).join('')
       + '<tr class="dip"><td colspan="2"><b>Toplam</b></td><td class="num"><b>'+sayi(toplam)+'</b></td><td></td></tr>'
