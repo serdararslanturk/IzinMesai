@@ -218,7 +218,9 @@ select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml
 .dtbl.dokum td .mono{font-size:13px; color:var(--ink); letter-spacing:.01em}
 .dtbl.dokum td b{color:#215C8C; font-family:'Archivo'; font-size:15px}
 .dtbl.dokum th.num, .dtbl.dokum td.num{text-align:right}
-.dtbl.dokum td.num .pill{margin-left:8px}
+.dtbl.dokum td.num .dokgun{display:inline-flex; align-items:center; justify-content:flex-end; gap:7px}
+.dtbl.dokum td.num .dokgun .pill{margin:0}
+.dtbl.dokum td.num .dokgun b{min-width:22px; text-align:right}
 .dtbl.dokum tr.dip td{background:#EEF6FC; border-top:2px solid #9CC4E4; padding-top:12px; padding-bottom:12px}
 .dtbl.dokum tr.dip:hover td{background:#EEF6FC}
 .coksec.dokumay{margin-top:0; vertical-align:middle}
@@ -2937,9 +2939,10 @@ function izinDokumCiz(){
               + '<span class="mono">'+trTarih(x.pay.bas)+'</span>'
               + (x.pay.kirpik?' <span class="pill kismi">kısmi</span>':'')+'</td>'
             + '<td><span class="mono">'+trTarih(x.pay.bit)+'</span></td>'
-            + '<td class="num"><b>'+(saatliIzin(i) ? sayi(i.saat)+' sa' : sayi(x.pay.gun))+'</b>'
+            + '<td class="num"><span class="dokgun">'
             + dusRozet
-            + (BEKLEYEN.includes(i.durum) ? '<span class="pill bekle">bekliyor</span>' : '')+'</td>'
+            + (BEKLEYEN.includes(i.durum) ? '<span class="pill bekle">bekliyor</span>' : '')
+            + '<b>'+(saatliIzin(i) ? sayi(i.saat)+' sa' : sayi(x.pay.gun))+'</b></span></td>'
             + '<td class="str dokumislem">'+ops+'</td></tr>';
         }).join('')
       + '<tr class="dip"><td colspan="2"><b>Bakiyeden düşen</b></td><td class="num"><b>'+sayi(toplam)+'</b></td><td></td></tr>'
