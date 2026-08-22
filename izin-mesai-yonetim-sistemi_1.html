@@ -210,7 +210,7 @@ select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml
 .dtbl tr.vurgu th{background:var(--brand-soft); color:var(--brand-deep); font-weight:600}
 .dtbl tr.vurgu td{background:var(--brand-soft); color:var(--brand-deep)}
 .dtbl tr.vurgu b{font-family:'Archivo'; font-size:16px}
-.dtbl.dokum{border-color:#C7DEEF}
+.dtbl.dokum{border-color:#C7DEEF; overflow:visible}   /* başlık-içi ay menüsü panelinin kırpılmaması için */
 .dtbl.dokum th{width:auto; background:#F1F7FC; color:#215C8C; text-align:left}
 .dtbl.dokum td b{color:#215C8C}
 .dtbl.dokum th.num, .dtbl.dokum td.num{text-align:right}
@@ -361,6 +361,8 @@ button.basliksec i{font-style:normal; opacity:.6; flex:none}
   border-radius:6px; padding:3px 8px; font-size:11px; font-family:inherit}
 .cokust button:hover{border-color:var(--brand); color:var(--brand)}
 .coklist{max-height:230px; overflow:auto; padding:5px}
+/* Ay listesi: 12 ay 2 sütunda, kaydırmasız, tamamı görünür */
+.coklist.aygrid{display:grid; grid-template-columns:1fr 1fr; gap:1px 6px; max-height:none; overflow:visible}
 .coklist label{display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer;
   font-size:12.5px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--ink)}
 .coklist label:hover{background:var(--brand-soft)}
@@ -1057,6 +1059,7 @@ const AYAR_VAR = {
   yillikMesaiSiniri:270,           // saat / yıl
   minIzinBildirim:1,               // kaç gün önceden talep edilmeli
   eksiSiniri:0,                    // izinde en çok kaç gün eksiye düşülebilir (0 = eksiye izin yok)
+  eksiKuraliAktif:false,           // eksiye düşme kuralı uygulansın mı (şimdilik kapalı)
   izinTurleri:JSON.parse(JSON.stringify(IZIN_TURLERI_VAR)),
   mesaiTurleri:JSON.parse(JSON.stringify(MESAI_TURLERI_VAR)),
   kidem:JSON.parse(JSON.stringify(KIDEM_VAR)),
@@ -2260,8 +2263,8 @@ function seciciAc(anahtar){
 function seciciKapat(){
   if(S.acikSecici){ S.acikSecici = ''; ciz(); }
 }
-/* secenekler: dizi, secili: dizi, degisFn: 'fnAdi' — indeksle çağrılır, null = temizle */
-function cokSecici(anahtar, secenekler, secili, degisFn){
+/* secenekler: dizi, secili: dizi, degisFn: 'fnAdi' — indeksle çağrılır, null = Tümünü seç/kaldır */
+function cokSecici(anahtar, secenekler, secili, degisFn, gridli){
   const acik = S.acikSecici === anahtar;
   const et = !secili.length ? 'Tümü'
     : secili.length === 1 ? secili[0]
@@ -2274,9 +2277,8 @@ function cokSecici(anahtar, secenekler, secili, degisFn){
     + (acik
       ? '<div class="cokpan" onclick="event.stopPropagation()">'
         + '<div class="cokust"><b>'+secili.length+' seçili</b>'
-        + '<button type="button" onclick="'+degisFn+'(null)">Temizle</button>'
-        + '<button type="button" onclick="seciciKapat()">Kapat</button></div>'
-        + '<div class="coklist">'
+        + '<button type="button" onclick="'+degisFn+'(null)">'+(secili.length >= secenekler.length ? 'Temizle' : 'Tümünü seç')+'</button></div>'
+        + '<div class="coklist'+(gridli?' aygrid':'')+'">'
         + secenekler.map((x,i) => '<label><input type="checkbox" '+(secili.includes(x)?'checked':'')
             + ' onchange="'+degisFn+'('+i+')"><span>'+esc(x)+'</span></label>').join('')
         + '</div></div>'
@@ -2286,7 +2288,7 @@ function cokSecici(anahtar, secenekler, secili, degisFn){
 
 
 /* Sütun başlığı içinde çoklu seçim: başlık metni tıklanınca dropdown açılır */
-function baslikSecici(anahtar, etiket, secenekler, secili, fn){
+function baslikSecici(anahtar, etiket, secenekler, secili, fn, gridli){
   const acik = S.acikSecici === anahtar;
   const et = !secili.length ? etiket : secili.length === 1 ? secili[0] : etiket+' · '+secili.length;
   return '<div class="coksec">'
@@ -2297,9 +2299,8 @@ function baslikSecici(anahtar, etiket, secenekler, secili, fn){
     + (acik
       ? '<div class="cokpan" onclick="event.stopPropagation()">'
         + '<div class="cokust"><b>'+(secili.length || 'Tüm')+' '+(secili.length ? 'seçili' : 'kayıtlar')+'</b>'
-        + '<button type="button" onclick="'+fn+'(null)">Temizle</button>'
-        + '<button type="button" onclick="seciciKapat()">Kapat</button></div>'
-        + '<div class="coklist">'
+        + '<button type="button" onclick="'+fn+'(null)">'+(secili.length >= secenekler.length ? 'Temizle' : 'Tümünü seç')+'</button></div>'
+        + '<div class="coklist'+(gridli?' aygrid':'')+'">'
         + secenekler.map((x,i) => '<label><input type="checkbox" '+(secili.includes(x)?'checked':'')
             + ' onchange="'+fn+'('+i+')"><span>'+esc(x)+'</span></label>').join('')
         + '</div></div>'
@@ -2638,11 +2639,11 @@ function vIzinlerim(){
         if(!toplam){
           alt = oncekiIp || 'Henüz izin kullanılmadı';
         } else {
-          alt = '<span'+(oncekiIp?' title="'+esc(oncekiIp)+'"':'')+'>Kullanılan <b>'+sayi(gerc)+'</b></span>'
-              + ' · <span style="color:var(--bekle)">Planlanan <b>'+sayi(b.planlanan)+'</b></span>';
+          alt = '<span style="font-size:14px;color:var(--ink)"'+(oncekiIp?' title="'+esc(oncekiIp)+'"':'')+'>Kullanılan <b>'+sayi(gerc)+'</b></span>'
+              + ' <span style="font-size:14px;color:var(--bekle)">· Planlanan <b>'+sayi(b.planlanan)+'</b></span>';
           if(oncekiIp) alt += '<br><span class="hint">'+oncekiIp+'</span>';
         }
-        return stat('Kullanılan', (toplam ? '−' : '') + sayi(toplam), 'gün', alt,
+        return stat('Kullanım', (toplam ? '−' : '') + sayi(toplam), 'gün', alt,
           toplam ? 'var(--red)' : '', "izinDokum('"+p.id+"')", 'raporlu');
       })()
     + stat('Güncel kalan izin hakkı', sayi(b.kalan), 'gün',
@@ -2770,7 +2771,7 @@ function vMesailerim(){
     + sayi(liste.filter(x=>x.karsilik==='ucret'&&x.durum!=='reddedildi'&&x.durum!=='iptal')
                 .reduce((a,x)=>a+mesaiTutar(x),0))+' ₺</div></div>'
     + '<div class="bd flush"><table class="ptbl" style="width:100%"><thead><tr>'
-    + '<th>'+baslikSecici('mesailerim_ay','Tarih', AY, mesaiAyF.map(ix=>AY[ix]), 'mesaiAySec')+'</th>'
+    + '<th>'+baslikSecici('mesailerim_ay','Tarih', AY, mesaiAyF.map(ix=>AY[ix]), 'mesaiAySec', true)+'</th>'
     + '<th>Saat</th><th>Hesaplama</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
     + (liste.length
         ? liste.map(x => mesaiSatiri(x,false)).join('') + mesaiDipToplam(liste)
@@ -2779,7 +2780,7 @@ function vMesailerim(){
   h += '</div>';
   return h;
 }
-function mesaiAySec(ix){ if(ix===null){ ayTumu('mesai'); return; } ayAc('mesai', ix); }
+function mesaiAySec(ix){ if(ix===null){ mesaiAyF = tumunuSecToggle(mesaiAyF, [...Array(12).keys()]); ciz(); return; } ayAc('mesai', ix); }
 
 
 /* ===================== KULLANIM DÖKÜMÜ =====================
@@ -2796,7 +2797,7 @@ function izinDokum(pid, yil){
 function dokumYilSec(y){ S.dokumYil = Number(y); izinDokumCiz(); }
 function dokumAyToggle(){ S.dokumAyAcik = !S.dokumAyAcik; izinDokumCiz(); }
 function dokumAyKapat(){ S.dokumAyAcik = false; izinDokumCiz(); }
-function dokumAySec(ix){ S.dokumAylar = S.dokumAylar || []; if(ix===null){ S.dokumAylar=[]; } else { const j=S.dokumAylar.indexOf(ix); if(j<0) S.dokumAylar.push(ix); else S.dokumAylar.splice(j,1); } izinDokumCiz(); }
+function dokumAySec(ix){ S.dokumAylar = S.dokumAylar || []; if(ix===null){ S.dokumAylar=tumunuSecToggle(S.dokumAylar,[...Array(12).keys()]); } else { const j=S.dokumAylar.indexOf(ix); if(j<0) S.dokumAylar.push(ix); else S.dokumAylar.splice(j,1); } izinDokumCiz(); }
 
 /* İznin seçili aya (ya da yıla) düşen kısmı */
 function dokumPayi(i, yil, ay){
@@ -2812,7 +2813,7 @@ function izinDokumCiz(){
   const pid = S.dokumKisi, yil = S.dokumYil;
   const p = per(pid); if(!p) return;
   const sayilir = i => GECERLI.includes(i.durum) || BEKLEYEN.includes(i.durum);
-  const aylar = (S.dokumAylar && S.dokumAylar.length) ? S.dokumAylar.slice().sort((a,b)=>a-b) : [''];   // boş = tüm yıl
+  const aylar = (S.dokumAylar && S.dokumAylar.length && S.dokumAylar.length < 12) ? S.dokumAylar.slice().sort((a,b)=>a-b) : [''];   // hepsi/boş = tüm yıl
 
   const satirlar = [];
   for(const i of S.izin){
@@ -2841,12 +2842,11 @@ function izinDokumCiz(){
   + '</div>'
   + '<div class="mt"><table class="dtbl dokum"><thead><tr>'
     + '<th>Başlangıç <div class="coksec" style="display:inline-block;margin-left:4px;vertical-align:middle">'
-      + '<button type="button" class="cokbtn'+((S.dokumAylar&&S.dokumAylar.length)?' dolu':'')+'" style="min-width:104px;padding:4px 8px" onclick="dokumAyToggle()"><span>'
+      + '<button type="button" class="cokbtn'+((S.dokumAylar&&S.dokumAylar.length)?' dolu':'')+'" style="min-width:104px;padding:4px 8px" onclick="event.stopPropagation();dokumAyToggle()"><span>'
         + ((S.dokumAylar&&S.dokumAylar.length) ? (S.dokumAylar.length===1?esc(AY[S.dokumAylar[0]]):S.dokumAylar.length+' ay') : 'Tüm yıl')+'</span><i>▾</i></button>'
-      + (S.dokumAyAcik ? '<div class="cokpan"><div class="cokust"><b>Ay</b>'
-          + '<button type="button" onclick="dokumAySec(null)">Temizle</button>'
-          + '<button type="button" onclick="dokumAyKapat()">Kapat</button></div>'
-          + '<div class="coklist">'+AY.map((a,ix)=>'<label><input type="checkbox" '+((S.dokumAylar||[]).includes(ix)?'checked':'')+' onchange="dokumAySec('+ix+')"><span>'+esc(a)+'</span></label>').join('')+'</div></div>' : '')
+      + (S.dokumAyAcik ? '<div class="cokpan" onclick="event.stopPropagation()"><div class="cokust"><b>Ay</b>'
+          + '<button type="button" onclick="dokumAySec(null)">'+((S.dokumAylar&&S.dokumAylar.length>=12) ? 'Temizle' : 'Tümünü seç')+'</button></div>'
+          + '<div class="coklist aygrid">'+AY.map((a,ix)=>'<label><input type="checkbox" '+((S.dokumAylar||[]).includes(ix)?'checked':'')+' onchange="dokumAySec('+ix+')"><span>'+esc(a)+'</span></label>').join('')+'</div></div>' : '')
       + '</div></th>'
     + '<th>Bitiş</th><th class="num">Gün</th><th></th></tr></thead><tbody>'
   + (satirlar.length
@@ -2865,7 +2865,9 @@ function izinDokumCiz(){
         }).join('')
       + '<tr class="dip"><td colspan="2"><b>Toplam</b></td><td class="num"><b>'+sayi(toplam)+'</b></td><td></td></tr>'
     : '<tr><td colspan="4"><div class="hint" style="padding:14px 0">Bu dönemde kayıt yok.</div></td></tr>')
-  + '</tbody></table></div></div>'
+  + '</tbody></table></div>'
+  + (S.dokumAyAcik ? '<div style="height:210px"></div>' : '')   // ay paneli açıkken kırpılmaması için yer aç
+  + '</div>'
   + '<div class="mf"><button class="btn" onclick="modalKapat()">Kapat</button></div>');
 }
 
@@ -3234,6 +3236,7 @@ function projeksiyonBakiye(pid, bit, haricId, ekGun){
 }
 /* Eksiye düşme sınırı kontrolü — geçerse null, aşarsa uyarı metni döner */
 function eksiSinirUyari(pid, tur, bit, ekGun, haricId){
+  if(!S.ayar.eksiKuraliAktif) return null;                  // kural kapalıyken hiç uygulanmaz
   if(!turBul(tur).yillikDus) return null;                   // yıllıktan düşmeyen türler sınırsız
   const sinir = Math.max(0, Number(S.ayar.eksiSiniri) || 0);
   const proj = projeksiyonBakiye(pid, bit, haricId || null, ekGun);
@@ -5090,7 +5093,7 @@ function rapTemizle(){ rapF = {q:'', dept:[], lok:[], sirala:'ad'}; S.acikSecici
 /* Çoklu seçim: ix null ise temizler */
 function rapDeptSec(ix){
   const l = rapDeptler();
-  if(ix === null){ rapF.dept = []; ciz(); return; }
+  if(ix === null){ rapF.dept = tumunuSecToggle(rapF.dept, l); ciz(); return; }
   const ad = l[ix]; if(ad === undefined) return;
   const yer = rapF.dept.indexOf(ad);
   if(yer < 0) rapF.dept.push(ad); else rapF.dept.splice(yer, 1);
@@ -5098,7 +5101,7 @@ function rapDeptSec(ix){
 }
 function rapLokSec(ix){
   const l = rapLoklar();
-  if(ix === null){ rapF.lok = []; ciz(); return; }
+  if(ix === null){ rapF.lok = tumunuSecToggle(rapF.lok, l); ciz(); return; }
   const ad = l[ix]; if(ad === undefined) return;
   const yer = rapF.lok.indexOf(ad);
   if(yer < 0) rapF.lok.push(ad); else rapF.lok.splice(yer, 1);
@@ -5355,10 +5358,16 @@ function lstDisaAktar(){
 
 /* ===================== MESAİ LİSTESİ ===================== */
 
-let msF = {q:'', dept:'', lok:'', durum:''};
+let msF = {q:'', dept:[], lok:[], durum:[]};
 
-function msFiltre(alan, deger){ msF[alan] = deger; ciz(); }
-function msTemizle(){ msF = {q:'', dept:'', lok:'', durum:''}; ciz(); }
+function msDeptler(){ return [...new Set(takvimKisiler().map(p=>p.dept))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function msLoklar(){ return [...new Set(takvimKisiler().map(p=>p.lokasyon||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function msDurumlar(){ return Object.entries(DURUM_AD).filter(x=>x[0]!=='taslak'&&x[0]!=='reddedildi').map(x=>x[1]); }
+function msDeptSec(i){ if(i===null){ msF.dept=tumunuSecToggle(msF.dept,msDeptler()); ciz(); return; } const ad=msDeptler()[i]; if(ad===undefined) return; const j=msF.dept.indexOf(ad); if(j<0) msF.dept.push(ad); else msF.dept.splice(j,1); ciz(); }
+function msLokSec(i){ if(i===null){ msF.lok=tumunuSecToggle(msF.lok,msLoklar()); ciz(); return; } const ad=msLoklar()[i]; if(ad===undefined) return; const j=msF.lok.indexOf(ad); if(j<0) msF.lok.push(ad); else msF.lok.splice(j,1); ciz(); }
+function msDurumSec(i){ if(i===null){ msF.durum=tumunuSecToggle(msF.durum,msDurumlar()); ciz(); return; } const ad=msDurumlar()[i]; if(ad===undefined) return; const j=msF.durum.indexOf(ad); if(j<0) msF.durum.push(ad); else msF.durum.splice(j,1); ciz(); }
+function msAySec(i){ if(i===null){ ayFiltre.mesai=tumunuSecToggle(ayFiltre.mesai,[...Array(12).keys()]); ciz(); return; } ayAc('mesai', i); }
+function msTemizle(){ msF = {q:'', dept:[], lok:[], durum:[]}; ayFiltre.mesai=[]; ciz(); }
 function msAra(v){
   msF.q = v; ciz();
   const el = document.getElementById('msAraKutu');
@@ -5376,9 +5385,9 @@ function msKayitlar(){
     const p = per(m.pid); if(!p) return false;
     if(!ayKapsar(m.tarih, S.yil, 'mesai')) return false;
     if(m.durum === 'reddedildi') return false;
-    if(msF.dept && p.dept !== msF.dept) return false;
-    if(msF.lok && (p.lokasyon || '') !== msF.lok) return false;
-    if(msF.durum && m.durum !== msF.durum) return false;
+    if(msF.dept.length && !msF.dept.includes(p.dept)) return false;
+    if(msF.lok.length && !msF.lok.includes(p.lokasyon || '')) return false;
+    if(msF.durum.length && !msF.durum.includes(DURUM_AD[m.durum])) return false;
     if(q && !((p.ad+' '+p.soyad+' '+p.unvan+' '+(m.aciklama||'')).toLocaleLowerCase('tr').includes(q))) return false;
     return true;
   }).sort((x,y) => y.tarih.localeCompare(x.tarih) || adSoyad(x.pid).localeCompare(adSoyad(y.pid),'tr'));
@@ -5389,15 +5398,14 @@ function vMesaiListe(){
   const depts = [...new Set(kapsam.map(p => p.dept))].sort((a,b) => a.localeCompare(b,'tr'));
   const loks  = [...new Set(kapsam.map(p => p.lokasyon || '').filter(Boolean))].sort((a,b) => a.localeCompare(b,'tr'));
   const kayitlar = msKayitlar();
-  const filtreVar = msF.q || msF.dept || msF.lok || msF.durum;
+  const filtreVar = msF.q || msF.dept.length || msF.lok.length || msF.durum.length || ayFiltre.mesai.length;
 
   const kapsamAdi = seviye() >= 2 ? 'Tüm personel' : 'Bana bağlı personel';
 
   let h = '<div class="row" style="justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">'
     + '<div><h1 style="font-size:20px">Mesai listesi</h1>'
     + '<div class="hint">'+kapsamAdi+' · '+esc(ayEtiketi(S.yil,'mesai'))+'</div></div>'
-    + '<button class="btn" onclick="msDisaAktar()">CSV indir</button></div>'
-    + '<div style="margin-bottom:12px">'+ayStrip('mesai')+'</div>';
+    + '<button class="btn" onclick="msDisaAktar()">CSV indir</button></div>';
 
   const sekme = S.sekme.mesailiste || 'ozet';
   h += '<div class="tabs">'
@@ -5408,8 +5416,9 @@ function vMesaiListe(){
   h += '<div class="card"><div class="hd">'
     + '<span class="hint">'+kayitlar.length+' kayıt'
     + (sekme==='ozet' ? ' · '+new Set(kayitlar.map(m=>m.pid)).size+' kişi' : '')+'</span>'
+    + '<span class="lb" style="margin-left:auto;margin-right:5px">Ay</span>'+cokSecici('msAy', AY, ayFiltre.mesai.map(ix=>AY[ix]), 'msAySec', true)
     + (filtreVar ? '<button class="btn sm" onclick="msTemizle()">Filtreyi temizle</button>' : '')
-    + '<div class="sp hint" style="font-size:11.5px">Sütun başlıklarından süzebilirsiniz</div></div>';
+    + '<div class="sp hint" style="font-size:11.5px">Başlıklardan süzebilirsiniz</div></div>';
 
   if(sekme === 'ozet') return h + msOzetTablo(kayitlar, depts, loks) + '</div>';
 
@@ -5419,15 +5428,11 @@ function vMesaiListe(){
     h += '<div class="twpair">'+ustCubuk()+'<div class="tw"><table class="ptbl"><thead><tr>'
       + '<th class="stl">Personel<div class="fsat">'
         + '<input type="text" id="msAraKutu" placeholder="Ara…" value="'+esc(msF.q)+'" oninput="msAra(this.value)"></div></th>'
-      + '<th>Departman<div class="fsat"><select onchange="msFiltre(\'dept\',this.value)"><option value="">Tümü</option>'
-        + depts.map(x => '<option'+(x===msF.dept?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div></th>'
-      + '<th>Lokasyon<div class="fsat"><select onchange="msFiltre(\'lok\',this.value)"><option value="">Tümü</option>'
-        + loks.map(x => '<option'+(x===msF.lok?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div></th>'
+      + '<th>Departman'+cokSecici('msDept', depts, msF.dept, 'msDeptSec')+'</th>'
+      + '<th>Lokasyon'+cokSecici('msLok', loks, msF.lok, 'msLokSec')+'</th>'
       + '<th>Tarih</th><th>Saat</th><th class="num">Süre</th>'
       + '<th class="num">Tutar</th>'
-      + '<th>Durum<div class="fsat"><select onchange="msFiltre(\'durum\',this.value)"><option value="">Tümü</option>'
-        + Object.entries(DURUM_AD).filter(x => x[0] !== 'taslak' && x[0] !== 'reddedildi')
-            .map(x => '<option value="'+x[0]+'"'+(x[0]===msF.durum?' selected':'')+'>'+esc(x[1])+'</option>').join('')+'</select></div></th>'
+      + '<th>Durum'+cokSecici('msDurum', msDurumlar(), msF.durum, 'msDurumSec')+'</th>'
       + '<th class="str"></th></tr></thead><tbody>';
     for(const m of kayitlar){
       const p = per(m.pid) || {}, t = mturBul(m.tur);
@@ -5561,14 +5566,10 @@ function msOzetTablo(kayitlar, depts, loks){
   let h = '<div class="bd flush"><div class="twpair">'+ustCubuk()+'<div class="tw"><table class="ptbl"><thead><tr>'
     + '<th class="stl">Personel<div class="fsat">'
       + '<input type="text" id="msAraKutu" placeholder="Ara…" value="'+esc(msF.q)+'" oninput="msAra(this.value)"></div></th>'
-    + '<th>Departman<div class="fsat"><select onchange="msFiltre(\'dept\',this.value)"><option value="">Tümü</option>'
-      + depts.map(x => '<option'+(x===msF.dept?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div></th>'
-    + '<th>Lokasyon<div class="fsat"><select onchange="msFiltre(\'lok\',this.value)"><option value="">Tümü</option>'
-      + loks.map(x => '<option'+(x===msF.lok?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div></th>'
+    + '<th>Departman'+cokSecici('msDept_o', depts, msF.dept, 'msDeptSec')+'</th>'
+    + '<th>Lokasyon'+cokSecici('msLok_o', loks, msF.lok, 'msLokSec')+'</th>'
     + '<th class="num">Toplam saat</th><th class="num">Tutar</th>'
-    + '<th>Durum<div class="fsat"><select onchange="msFiltre(\'durum\',this.value)"><option value="">Tümü</option>'
-      + Object.entries(DURUM_AD).filter(x => x[0] !== 'taslak' && x[0] !== 'reddedildi')
-          .map(x => '<option value="'+x[0]+'"'+(x[0]===msF.durum?' selected':'')+'>'+esc(x[1])+'</option>').join('')+'</select></div></th>'
+    + '<th>Durum'+cokSecici('msDurum_o', msDurumlar(), msF.durum, 'msDurumSec')+'</th>'
     + '<th class="str"></th></tr></thead><tbody>';
 
   for(const g of satirlar){
@@ -5707,7 +5708,7 @@ function vIzinde(){
         && (!seciliLok.length || seciliLok.includes(per(i.pid)?.lokasyon || ''))
         && (!seciliTur.length || seciliTur.includes(turBul(i.tur).ad))
         && (!seciliDurum.length || seciliDurum.includes(DURUM_AD[i.durum]));
-  const secmece = seciliAy.length ? seciliAy.slice().sort((a,b)=>a-b) : [''];   // '' = tüm yıl (tek kayıt)
+  const secmece = (seciliAy.length && seciliAy.length < 12) ? seciliAy.slice().sort((a,b)=>a-b) : [''];   // hepsi/boş = tüm yıl (bölmeden)
   const satirlar = [];
   for(const i of S.izin){
     if(!gecer(i)) continue;
@@ -5734,7 +5735,7 @@ function vIzinde(){
       + '<th style="width:14%">'+baslikSecici('rapor_dept','Departman', depts, seciliDept, 'raporDeptSec')+'</th>'
       + '<th style="width:14%">'+(loks.length ? baslikSecici('rapor_lok','Lokasyon', loks, seciliLok, 'raporLokSec') : 'Lokasyon')+'</th>'
       + '<th style="width:15%">'+baslikSecici('rapor_tur','Tür', raporTurler(), seciliTur, 'raporTurSec')+'</th>'
-      + '<th style="width:16%">'+baslikSecici('rapor_ay','Tarih', AY, seciliAy.map(ix=>AY[ix]), 'raporAySec')+'</th>'
+      + '<th style="width:16%">'+baslikSecici('rapor_ay','Tarih', AY, seciliAy.map(ix=>AY[ix]), 'raporAySec', true)+'</th>'
       + '<th class="num" style="width:7%">Gün</th>'
       + '<th style="width:18%">'+baslikSecici('rapor_durum','Durum', raporDurumlar(), seciliDurum, 'raporDurumSec')+'</th></tr></thead><tbody>';
   if(!satirlar.length) h += '<tr><td colspan="7"><div class="empty"><div class="e1">Seçilen kapsamda izin kaydı yok</div>Başlıklardaki filtreleri (arama / Departman / Lokasyon / Tür / Tarih / Durum) değiştirin.</div></td></tr>';
@@ -5755,16 +5756,19 @@ function vIzinde(){
   return h;
 }
 
-/* İzin raporu filtreleri — cokSecici ile (indeksle çağrılır, null = temizle; boş = hepsi) */
+/* Tümünü seç / kaldır (Excel gibi): hepsi seçiliyse temizle, değilse tümünü seç */
+function tumunuSecToggle(mevcut, tumListe){ return (mevcut && mevcut.length >= tumListe.length) ? [] : tumListe.slice(); }
+
+/* İzin raporu filtreleri — cokSecici ile (indeksle çağrılır, null = Tümünü seç/kaldır; boş = hepsi) */
 function raporDeptler(){ return [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.dept))].sort((a,b)=>a.localeCompare(b,'tr')); }
 function raporLoklar(){ return [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.lokasyon||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
-function raporAySec(i){ if(i===null){ S.raporAy=[]; ciz(); return; } S.raporAy=S.raporAy||[]; const j=S.raporAy.indexOf(i); if(j<0) S.raporAy.push(i); else S.raporAy.splice(j,1); ciz(); }
-function raporDeptSec(i){ if(i===null){ S.raporDept=[]; ciz(); return; } const ad=raporDeptler()[i]; if(ad===undefined) return; S.raporDept=S.raporDept||[]; const j=S.raporDept.indexOf(ad); if(j<0) S.raporDept.push(ad); else S.raporDept.splice(j,1); ciz(); }
-function raporLokSec(i){ if(i===null){ S.raporLok=[]; ciz(); return; } const ad=raporLoklar()[i]; if(ad===undefined) return; S.raporLok=S.raporLok||[]; const j=S.raporLok.indexOf(ad); if(j<0) S.raporLok.push(ad); else S.raporLok.splice(j,1); ciz(); }
+function raporAySec(i){ if(i===null){ S.raporAy=tumunuSecToggle(S.raporAy,[...Array(12).keys()]); ciz(); return; } S.raporAy=S.raporAy||[]; const j=S.raporAy.indexOf(i); if(j<0) S.raporAy.push(i); else S.raporAy.splice(j,1); ciz(); }
+function raporDeptSec(i){ if(i===null){ S.raporDept=tumunuSecToggle(S.raporDept,raporDeptler()); ciz(); return; } const ad=raporDeptler()[i]; if(ad===undefined) return; S.raporDept=S.raporDept||[]; const j=S.raporDept.indexOf(ad); if(j<0) S.raporDept.push(ad); else S.raporDept.splice(j,1); ciz(); }
+function raporLokSec(i){ if(i===null){ S.raporLok=tumunuSecToggle(S.raporLok,raporLoklar()); ciz(); return; } const ad=raporLoklar()[i]; if(ad===undefined) return; S.raporLok=S.raporLok||[]; const j=S.raporLok.indexOf(ad); if(j<0) S.raporLok.push(ad); else S.raporLok.splice(j,1); ciz(); }
 function raporTurler(){ return S.ayar.izinTurleri.map(t=>t.ad); }
 function raporDurumlar(){ return ['onaylandi','yonetici_bekliyor','iptal_bekliyor'].map(k=>DURUM_AD[k]); }
-function raporTurSec(i){ if(i===null){ S.raporTur=[]; ciz(); return; } const ad=raporTurler()[i]; if(ad===undefined) return; S.raporTur=S.raporTur||[]; const j=S.raporTur.indexOf(ad); if(j<0) S.raporTur.push(ad); else S.raporTur.splice(j,1); ciz(); }
-function raporDurumSec(i){ if(i===null){ S.raporDurum=[]; ciz(); return; } const ad=raporDurumlar()[i]; if(ad===undefined) return; S.raporDurum=S.raporDurum||[]; const j=S.raporDurum.indexOf(ad); if(j<0) S.raporDurum.push(ad); else S.raporDurum.splice(j,1); ciz(); }
+function raporTurSec(i){ if(i===null){ S.raporTur=tumunuSecToggle(S.raporTur,raporTurler()); ciz(); return; } const ad=raporTurler()[i]; if(ad===undefined) return; S.raporTur=S.raporTur||[]; const j=S.raporTur.indexOf(ad); if(j<0) S.raporTur.push(ad); else S.raporTur.splice(j,1); ciz(); }
+function raporDurumSec(i){ if(i===null){ S.raporDurum=tumunuSecToggle(S.raporDurum,raporDurumlar()); ciz(); return; } const ad=raporDurumlar()[i]; if(ad===undefined) return; S.raporDurum=S.raporDurum||[]; const j=S.raporDurum.indexOf(ad); if(j<0) S.raporDurum.push(ad); else S.raporDurum.splice(j,1); ciz(); }
 function raporAraSet(v){ S.raporAra=v; ciz(); const el=document.getElementById('raporAraKutu'); if(el){ el.focus(); try{ el.setSelectionRange(el.value.length, el.value.length); }catch(e){} } }
 
 
@@ -5979,7 +5983,7 @@ let kadroLst = {dept:[], lok:[], yon:[], ucret:[]};      // seçenekler
 
 /* ix null ise temizler; değilse seçeneği açar/kapatır */
 function kadroSecim(alan, ix){
-  if(ix === null) kadroSec[alan] = [];
+  if(ix === null) kadroSec[alan] = tumunuSecToggle(kadroSec[alan], kadroLst[alan] || []);
   else {
     const v = kadroLst[alan][ix];
     const l = kadroSec[alan], y = l.indexOf(v);
@@ -6007,8 +6011,7 @@ function kadroSecici(etiket, alan, fn){
     + (acik
       ? '<div class="cokpan" onclick="event.stopPropagation()">'
         + '<div class="cokust"><b>'+(secili.length || 'Tüm')+' '+(secili.length ? 'seçili' : 'kayıtlar')+'</b>'
-        + '<button type="button" onclick="'+fn+'(null)">Temizle</button>'
-        + '<button type="button" onclick="seciciKapat()">Kapat</button></div>'
+        + '<button type="button" onclick="'+fn+'(null)">'+(secili.length >= secenekler.length ? 'Temizle' : 'Tümünü seç')+'</button></div>'
         + '<div class="coklist">'
         + secenekler.map((x,i) => '<label><input type="checkbox" '+(secili.includes(x)?'checked':'')
             + ' onchange="'+fn+'('+i+')"><span>'+esc(x)+'</span></label>').join('')
@@ -6116,7 +6119,8 @@ function vAyar(){
     + '<div class="fld"><label class="lb">Günlük çalışma saati</label><input type="number" step="0.5" value="'+(a.gunlukSaat||7.5)+'" onchange="S.ayar.gunlukSaat=Number(this.value);kaydet()"></div>'
     + '<div class="fld"><label class="lb">İzinde eksiye düşme sınırı (gün)</label>'
       + '<input type="number" min="0" step="0.5" value="'+(a.eksiSiniri||0)+'" onchange="S.ayar.eksiSiniri=Math.max(0,Number(this.value)||0);kaydet()">'
-      + '<div class="hint" style="margin-top:3px">Bakiyesi yetmeyen personel en çok bu kadar gün eksiye düşebilir (0 = eksiye izin yok). İzin tarihine kadar kazanılacak hak ediş de hesaba katılır.</div></div>'
+      + '<label class="row" style="cursor:pointer;margin-top:7px;gap:6px"><input type="checkbox" style="width:auto" '+(a.eksiKuraliAktif?'checked':'')+' onchange="S.ayar.eksiKuraliAktif=this.checked;kaydet()"> Bu kuralı uygula</label>'
+      + '<div class="hint" style="margin-top:3px">İşaretli değilse kural çalışmaz. Bakiyesi yetmeyen personel en çok bu kadar gün eksiye düşebilir (0 = eksiye izin yok). İzin tarihine kadar kazanılacak hak ediş de hesaba katılır.</div></div>'
     + '<div class="fld"><label class="lb">Mesai başlangıç saati</label>'
       + '<input type="time" value="'+(a.isBaslangic||'08:30')+'" onchange="S.ayar.isBaslangic=this.value;kaydet()">'
       + '<div class="hint" style="margin-top:5px">Normal çalışmanın başladığı saat</div></div>'
@@ -6754,6 +6758,7 @@ async function baslat(){
   S.ayar.sistemBaslangic = S.ayar.sistemBaslangic || AYAR_VAR.sistemBaslangic;
   if(S.ayar.arifeYarim === undefined) S.ayar.arifeYarim = false;
   if(S.ayar.eksiSiniri === undefined) S.ayar.eksiSiniri = 0;
+  if(S.ayar.eksiKuraliAktif === undefined) S.ayar.eksiKuraliAktif = false;
   S.ayar.unvanDept = S.ayar.unvanDept || {};
   delete S.ayar.altUst; delete S.ayar.altDeptler; delete S.ayar.unvanAlt; delete S.ayar.ikOnayiZorunlu;
   // İK onay adımı kaldırıldı: bekleyen kayıtlar yönetici onayıyla tamamlanmış sayılır
@@ -6804,7 +6809,7 @@ async function baslat(){
   $('#ov').onclick = e => { if(e.target.id === 'ov') modalKapat(); };
   document.addEventListener('keydown', e => { if(e.key === 'Escape') modalKapat(); });
   document.addEventListener('keydown', formTuslari);
-  document.addEventListener('click', () => { try{ if(S.acikSecici) seciciKapat(); }catch(e){} });
+  document.addEventListener('click', () => { try{ if(S.acikSecici) seciciKapat(); if(S.dokumAyAcik){ S.dokumAyAcik=false; izinDokumCiz(); } }catch(e){} });
 
   ciz();
   if(eksik) bildir(eksik+' eksik alan güncellendi (T.C. no, ücret, lokasyon).');
