@@ -569,6 +569,10 @@ tbody tr:last-child td{border-bottom:0}
 .ov.on{display:flex}
 .modal{background:var(--surface); border-radius:14px; width:100%; max-width:680px; box-shadow:0 24px 60px rgba(20,30,28,.28); animation:up .16s ease;
   display:flex; flex-direction:column; max-height:calc(100vh - 56px)}
+.modal.genis{max-width:1060px}
+.modal .mb .g5.kartrapor{grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:4px}
+@media(max-width:1100px){ .modal .mb .g5.kartrapor{grid-template-columns:repeat(3,1fr)} }
+@media(max-width:720px){ .modal .mb .g5.kartrapor{grid-template-columns:1fr 1fr} }
 @keyframes up{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
 .modal .mh{padding:16px 20px; border-bottom:1px solid var(--line2); display:flex; align-items:center; flex:none}
 .modal .mh h3{font-size:16px}
@@ -1728,7 +1732,7 @@ function bildir(msg){
   const el = $('#toast'); el.textContent = msg; el.classList.add('on');
   clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2600);
 }
-function modalAc(html){ $('#modal').innerHTML = html; $('#ov').classList.add('on'); }
+function modalAc(html, genis){ const m = $('#modal'); m.className = 'modal'+(genis?' genis':''); m.innerHTML = html; $('#ov').classList.add('on'); }
 
 /* Tarayıcı confirm() penceresi bazı ortamlarda engellendiği için kendi onayımız */
 function onayIste(baslik, metin, butonAdi, islem){
@@ -1753,7 +1757,7 @@ function onayVazgec(){
   if(geri){ $('#modal').innerHTML = geri; }
   else modalKapat();
 }
-function modalKapat(){ S.kayitKisi = null; S.kayitTip = ''; S.kayitAralik = null; S.onayIslemi = null; S.onayGeri = null; $('#ov').classList.remove('on'); $('#modal').innerHTML = ''; }
+function modalKapat(){ S.kayitKisi = null; S.kayitTip = ''; S.kayitAralik = null; S.onayIslemi = null; S.onayGeri = null; $('#ov').classList.remove('on'); const m=$('#modal'); m.className='modal'; m.innerHTML = ''; }
 
 /* ===================== TANIM LİSTELERİ ve AÇILIR ALANLAR ===================== */
 
@@ -2529,6 +2533,35 @@ function stat(k, v, birim, s, renk, tik, sinif){
         + '<path d="M4.4 6.2h7.2M4.4 9h7.2M4.4 11.6h4.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>'
         + '</svg><span>Raporu aç</span><i>›</i></div>' : '')+'</div>';
 }
+
+/* Bir kişinin 5'li izin özeti kartları (İzinlerim ve İzin hakları raporu > Kayıtlar).
+   KULLANIM kartı tıklanınca kullanım dökümü açılır ("Raporu aç"). */
+function izinOzetKartlari(p, b){
+  const donemAlt = Number(b.bakiyeTarihi.slice(0,4)) >= S.yil
+      ? trTarih(b.bakiyeTarihi)+' itibarıyla'
+      : (S.yil-1)+' yılından devir';
+  const toplam = b.yilToplamKullanim;               // planlanan dahil toplam
+  const gerc   = toplam - b.planlanan;              // gerçekleşen
+  const oncekiIp = b.oncekiKullanim ? sayi(b.oncekiKullanim)+' günü dönem başı rakamına dahil' : '';
+  let kullAlt;
+  if(!toplam){
+    kullAlt = oncekiIp || 'Henüz izin kullanılmadı';
+  } else {
+    kullAlt = '<span style="font-size:14px;color:var(--ink)"'+(oncekiIp?' title="'+esc(oncekiIp)+'"':'')+'>Kullanılan <b>'+sayi(gerc)+'</b></span>'
+        + ' <span style="font-size:14px;color:var(--bekle)">· Planlanan <b>'+sayi(b.planlanan)+'</b></span>';
+    if(oncekiIp) kullAlt += '<br><span class="hint">'+oncekiIp+'</span>';
+  }
+  return stat('Dönem başı izin hakkı', sayi(b.devir), 'gün', donemAlt)
+    + stat('Kullanım', (toplam ? '−' : '') + sayi(toplam), 'gün', kullAlt,
+        toplam ? 'var(--red)' : '', "izinDokum('"+p.id+"')", 'raporlu')
+    + stat('Güncel kalan izin hakkı', sayi(b.kalan), 'gün',
+        S.yil === new Date().getFullYear() ? 'Bugün kullanılabilir' : S.yil+' içinde kullanılabilir')
+    + stat(S.yil+' hak edişinden gelecek', sayi(b.yilSonuEk), 'gün',
+        b.yilSonuKazanim.length
+          ? b.yilSonuKazanim.map(x => trTarih(x.tarih)).join(', ')+' tarihinde eklenir'
+          : (b.sonraki ? 'Bu yıl yok · sonraki '+trTarih(b.sonraki.tarih) : 'Hak ediş tarihi yok'))
+    + stat('Hak ediş sonrası kalan', sayi(b.yilSonuKalan), 'gün', '31 Ara '+S.yil+' itibarıyla');
+}
 /* ===================== 6. İZİNLERİM ve MESAİLERİM ===================== */
 
 function izinSatiri(i, yonetimGorunumu){
@@ -2627,32 +2660,7 @@ function vIzinlerim(){
     : [];
 
   h += '<div class="grid g5" style="margin-bottom:14px">'
-    + stat('Dönem başı izin hakkı', sayi(b.devir), 'gün',
-        Number(b.bakiyeTarihi.slice(0,4)) >= S.yil
-          ? trTarih(b.bakiyeTarihi)+' itibarıyla'
-          : (S.yil-1)+' yılından devir')
-    + (() => {
-        const toplam = b.yilToplamKullanim;               // planlanan dahil toplam (planlananlar da kullanılan sayılır)
-        const gerc = toplam - b.planlanan;                // gerçekleşen (fiilen kullanılan)
-        const oncekiIp = b.oncekiKullanim ? sayi(b.oncekiKullanim)+' günü dönem başı rakamına dahil' : '';
-        let alt;
-        if(!toplam){
-          alt = oncekiIp || 'Henüz izin kullanılmadı';
-        } else {
-          alt = '<span style="font-size:14px;color:var(--ink)"'+(oncekiIp?' title="'+esc(oncekiIp)+'"':'')+'>Kullanılan <b>'+sayi(gerc)+'</b></span>'
-              + ' <span style="font-size:14px;color:var(--bekle)">· Planlanan <b>'+sayi(b.planlanan)+'</b></span>';
-          if(oncekiIp) alt += '<br><span class="hint">'+oncekiIp+'</span>';
-        }
-        return stat('Kullanım', (toplam ? '−' : '') + sayi(toplam), 'gün', alt,
-          toplam ? 'var(--red)' : '', "izinDokum('"+p.id+"')", 'raporlu');
-      })()
-    + stat('Güncel kalan izin hakkı', sayi(b.kalan), 'gün',
-        S.yil === new Date().getFullYear() ? 'Bugün kullanılabilir' : S.yil+' içinde kullanılabilir')
-    + stat(S.yil+' hak edişinden gelecek', sayi(b.yilSonuEk), 'gün',
-        b.yilSonuKazanim.length
-          ? b.yilSonuKazanim.map(x => trTarih(x.tarih)).join(', ')+' tarihinde eklenir'
-          : (b.sonraki ? 'Bu yıl yok · sonraki '+trTarih(b.sonraki.tarih) : 'Hak ediş tarihi yok'))
-    + stat('Hak ediş sonrası kalan', sayi(b.yilSonuKalan), 'gün', '31 Ara '+S.yil+' itibarıyla')
+    + izinOzetKartlari(p, b)
     + stat('Kimler izinde', izindeKisiSayisi(), 'kişi', 'Bugün izinde', '', 'izindeAc()', 'yalnizdar raporlu mavi')
     + '</div>';
 
@@ -4472,19 +4480,7 @@ function kisiKayitlariCiz(){
         + '<div class="v-ad">'+sayi(mo.izinKarsilik)+' saat</div>'
         + '<div class="s">Kalan kota '+sayi(Math.max(0,mo.kalanKota))+' saat</div></div>'
       + '</div>'
-    : '<div class="ozet">'
-  + '<div class="ozet-h"><div class="lb">Dönem başı</div><div class="v">'+sayi(b.devir)+'<small>gün</small></div>'
-    + '<div class="s">'+trTarih(b.bakiyeTarihi)+' itibarıyla</div></div>'
-  + '<div class="ozet-h"><div class="lb">'+S.yil+' kullanılan</div>'
-    + '<div class="v"'+(b.yilToplamKullanim?' style="color:var(--red)"':'')+'>'
-    + (b.yilToplamKullanim?'−':'')+sayi(b.yilToplamKullanim)+'<small>gün</small></div>'
-    + '<div class="s">Yıllık bakiyeden düşen · planlananlar dahil</div></div>'
-  + '<div class="ozet-h"><div class="lb">Güncel kalan</div><div class="v">'+sayi(b.kalan)+'<small>gün</small></div>'
-    + '<div class="s">Hak ediş sonrası '+sayi(b.yilSonuKalan)+' gün</div></div>'
-  + '<div class="ozet-h don"><div class="lb">Sonraki hak ediş</div>'
-    + '<div class="v-ad">'+(b.sonraki ? trTarih(b.sonraki.tarih) : '—')+'</div>'
-    + '<div class="s">'+(b.sonraki ? '+'+b.sonraki.gun+' gün · '+b.sonraki.kidem+' yıllık kıdem' : 'Hak ediş tarihi yok')+'</div></div>'
-  + '</div>')
+    : '<div class="grid g5 kartrapor">'+izinOzetKartlari(p, b)+'</div>')
 
   + (mesaiGorunum ? '' : turler.length
       ? '<div class="lb" style="margin-top:16px">'+S.yil+' · izin türüne göre</div>'
@@ -4521,7 +4517,7 @@ function kisiKayitlariCiz(){
               : '<span class="pill" style="margin-right:auto">Mesai girişi kapalı</span>')
           : '<button class="btn" style="margin-right:auto" onclick="izinFormu(\''+pid+'\')">+ İzin gir</button>')
       : '')
-  + '<button class="btn" onclick="modalKapat()">Kapat</button></div>');
+  + '<button class="btn" onclick="modalKapat()">Kapat</button></div>', !mesaiGorunum);
 }
 
 /* Detay penceresi kapanınca kişi kayıtlarına geri döner */
