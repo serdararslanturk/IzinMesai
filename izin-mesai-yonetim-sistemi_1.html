@@ -215,7 +215,12 @@ select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml
   text-align:left; font-size:11px; font-weight:700; letter-spacing:.055em; text-transform:uppercase; border-bottom:1px solid #C7DEEF}
 .dtbl.dokum td{padding:12px 15px; font-size:13.5px; border-top:1px solid #EDF3F8; vertical-align:middle}
 .dtbl.dokum tbody tr:hover td{background:#F8FBFE}
-.dtbl.dokum td .mono{font-size:13px; color:var(--ink); letter-spacing:.01em}
+.dtbl.dokum td .mono{font-size:13px; color:var(--ink); letter-spacing:.01em; white-space:nowrap}
+.dtbl.dokum td.doktur{white-space:normal; color:var(--ink); font-size:13px; min-width:120px}
+.dtbl.dokum td.doktur .doktur-ad{display:flex; align-items:baseline; gap:8px}
+.dtbl.dokum td.doktur .ddot{flex:none; position:relative; top:1px}
+.dtbl.dokum td.doktur .doktur-rozet{margin-top:5px; padding-left:17px}
+.pill{white-space:nowrap}
 .dtbl.dokum td b{color:#215C8C; font-family:'Archivo'; font-size:15px}
 .dtbl.dokum th.num, .dtbl.dokum td.num{text-align:right}
 .dtbl.dokum td.num .dokgun{display:inline-flex; align-items:center; justify-content:flex-end; gap:7px}
@@ -2917,7 +2922,7 @@ function izinDokumCiz(){
     + '</div>'
   + '</div>'
   + '<div class="mt"><table class="dtbl dokum"><thead><tr>'
-    + '<th>Başlangıç</th>'
+    + '<th>İzin türü</th><th>Başlangıç</th>'
     + '<th>Bitiş</th><th class="num">Gün</th><th></th></tr></thead><tbody>'
   + (satirlar.length
     ? satirlar.map(x => {
@@ -2935,18 +2940,18 @@ function izinDokumCiz(){
               : '<span class="pill dusmez" title="Yıllık izin hakkından düşmez">düşmez</span>';
           }
           return '<tr>'
-            + '<td><span class="ddot" style="background:'+t.renk+'" title="'+esc(t.ad)+'"></span>'
-              + '<span class="mono">'+trTarih(x.pay.bas)+'</span>'
+            + '<td class="doktur"><div class="doktur-ad"><span class="ddot" style="background:'+t.renk+'"></span><span>'+esc(t.ad)+'</span></div>'
+              + (dusRozet ? '<div class="doktur-rozet">'+dusRozet+'</div>' : '')+'</td>'
+            + '<td><span class="mono">'+trTarih(x.pay.bas)+'</span>'
               + (x.pay.kirpik?' <span class="pill kismi">kısmi</span>':'')+'</td>'
             + '<td><span class="mono">'+trTarih(x.pay.bit)+'</span></td>'
             + '<td class="num"><span class="dokgun">'
-            + dusRozet
             + (BEKLEYEN.includes(i.durum) ? '<span class="pill bekle">bekliyor</span>' : '')
             + '<b>'+(saatliIzin(i) ? sayi(i.saat)+' sa' : sayi(x.pay.gun))+'</b></span></td>'
             + '<td class="str dokumislem">'+ops+'</td></tr>';
         }).join('')
-      + '<tr class="dip"><td colspan="2"><b>Bakiyeden düşen</b></td><td class="num"><b>'+sayi(toplam)+'</b></td><td></td></tr>'
-    : '<tr><td colspan="4"><div class="hint" style="padding:14px 0">Bu dönemde kayıt yok.</div></td></tr>')
+      + '<tr class="dip"><td colspan="3"><b>Bakiyeden düşen</b></td><td class="num"><b>'+sayi(toplam)+'</b></td><td></td></tr>'
+    : '<tr><td colspan="5"><div class="hint" style="padding:14px 0">Bu dönemde kayıt yok.</div></td></tr>')
   + '</tbody></table></div>'
   + (ozelVar ? '<div class="hint dokumnot">Toplam yalnızca yıllık izin hakkından düşen günleri kapsar. Evlilik, doğum günü, babalık, ölüm gibi izinler listede görünür; yasal hakkı aşmadıkça bakiyeden düşmez.</div>' : '')
   + (S.dokumAyAcik ? '<div style="height:210px"></div>' : '')   // ay paneli açıkken kırpılmaması için yer aç
