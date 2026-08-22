@@ -229,6 +229,9 @@ select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml
   box-shadow:0 0 0 3px rgba(20,60,90,.06)}
 .pill.bekle{background:#FFF3D4; color:#8A6A16; border-color:#EEDBA0}
 .pill.kismi{background:#EAF1F6; color:#5A7488; border-color:#D3E1EB}
+.pill.dusmez{background:#EEF1F4; color:#8A93A0; border-color:#DEE4EA}
+.dokumnot{margin-top:9px; font-size:11.5px; line-height:1.5; padding:8px 11px; background:#F6F8FA;
+  border:1px solid var(--line); border-radius:8px; color:var(--ink2)}
 /* revize: eski – yeni karşılaştırma tablosu */
 /* kadro listesinde başlığın kendisi süzgeç */
 .basliksec{width:100%; font-family:'Archivo',sans-serif; font-weight:700; font-size:12px;
@@ -1460,6 +1463,30 @@ function izinSuresiYazi(i){
 function turBul(kod){ return S.ayar.izinTurleri.find(t => t.kod === kod) || {ad:kod, renk:'#75828F', yillikDus:false}; }
 function mturBul(kod){ return S.ayar.mesaiTurleri.find(t => t.kod === kod) || {ad:kod, carpan:1}; }
 
+/* Bir iznin yıllık izin hakkından (bakiyeden) düşen gün sayısı.
+   - yillikDus türler tümüyle düşer (saatli izinlerde gun=0; saat bazlı ayrıca işlenir).
+   - Düşmeyen türlerde (evlilik, doğum günü, babalık, ölüm…) yasal hak (hakGun) aşılırsa
+     yalnızca AŞAN kısım düşer; limit içinde kalırsa hiç düşmez. */
+function dusenGun(i){
+  const t = turBul(i.tur), g = i.gun || 0;
+  if(t.yillikDus) return g;
+  if(t.hakGun && g > t.hakGun) return +(g - t.hakGun).toFixed(2);
+  return 0;
+}
+/* Aya/aralığa kırpılmış payın bakiyeden düşen kısmı (döküm dip toplamı için) */
+function dusenGunPay(i, payGun){
+  const tam = i.gun || 0;
+  if(!tam) return 0;
+  return +(dusenGun(i) * (payGun / tam)).toFixed(2);
+}
+/* Bir talebin (henüz kaydedilmemiş) bakiyeden düşecek gün sayısı — form önizlemesi için */
+function dusenGunTutar(tur, gun){
+  const t = turBul(tur), g = gun || 0;
+  if(t.yillikDus) return g;
+  if(t.hakGun && g > t.hakGun) return +(g - t.hakGun).toFixed(2);
+  return 0;
+}
+
 const BEKLEYEN = ['yonetici_bekliyor','iptal_bekliyor'];
 /* Bakiyeyi tutan durumlar: onaylı ya da iptali henüz onaylanmamış */
 const GECERLI = ['onaylandi','iptal_bekliyor'];
@@ -1524,9 +1551,11 @@ function bakiye(pid, yil){
   const kullanimAralik = (basT, bitT) => {
     let t = 0;
     for(const i of S.izin){
-      if(i.pid !== pid || !dusenMi(i) || !sayilir(i)) continue;
+      if(i.pid !== pid || !sayilir(i)) continue;
+      const dg = dusenGun(i);
+      if(!dg) continue;
       if(i.bas < bt || i.bas < basT || i.bas > bitT) continue;
-      t += i.gun;
+      t += dg;
     }
     return t;
   };
@@ -1548,15 +1577,17 @@ function bakiye(pid, yil){
 
   let kullanilan = 0, planlanan = 0, oncekiKullanim = 0, oncekiAdet = 0;
   for(const i of S.izin){
-    if(i.pid !== pid || !dusenMi(i)) continue;
+    if(i.pid !== pid) continue;
+    const dg = dusenGun(i);                            // yalnızca bakiyeden düşen kısım
+    if(!dg) continue;
     if(i.bas.slice(0,4) !== String(yil)) continue;
     if(i.bas < bt){                                    // dönem başı rakamının içinde sayılır
-      if(GECERLI.includes(i.durum)){ oncekiKullanim += i.gun; oncekiAdet++; }
+      if(GECERLI.includes(i.durum)){ oncekiKullanim += dg; oncekiAdet++; }
       continue;
     }
     if(!sayilir(i)) continue;
-    if(GECERLI.includes(i.durum)) (i.bit < bugunS) ? kullanilan += i.gun : planlanan += i.gun;
-    else planlanan += i.gun;
+    if(GECERLI.includes(i.durum)) (i.bit < bugunS) ? kullanilan += dg : planlanan += dg;
+    else planlanan += dg;
   }
   /* Saatlik izinler: biriken saatler tam güne ulaştıkça bakiyeden düşer */
   let saatlikSaat = 0, saatlikBekleyen = 0;
@@ -2859,9 +2890,10 @@ function izinDokumCiz(){
   }
   satirlar.sort((a,b) => a.pay.bas.localeCompare(b.pay.bas));
 
-  const toplam = satirlar.reduce((a,x) => a + x.pay.gun, 0);
+  const toplam = +satirlar.reduce((a,x) => a + dusenGunPay(x.i, x.pay.gun), 0).toFixed(2);   // yalnızca bakiyeden düşen kısım
   const bekleyen = satirlar.filter(x => BEKLEYEN.includes(x.i.durum));
   const bekGun = bekleyen.reduce((a,x) => a + x.pay.gun, 0);
+  const ozelVar = satirlar.some(x => !saatliIzin(x.i) && !turBul(x.i.tur).yillikDus);   // haktan düşmeyen tür var mı
 
   const yillar = [];
   for(let y = ilkYil(); y <= Math.max(S.yil, new Date().getFullYear()) + 1; y++) yillar.push(y);
@@ -2893,18 +2925,27 @@ function izinDokumCiz(){
             ops += ' <button class="btn sm" onclick="izinRevizeAc(\''+i.id+'\')">Revize</button>';
           else if(izinIptalTalebi(i))
             ops += ' <button class="btn sm" onclick="izinIptalTalep(\''+i.id+'\',\'kisi\')">İptal talebi</button>';
+          const dPay = dusenGunPay(i, x.pay.gun);
+          let dusRozet = '';
+          if(!saatliIzin(i) && !t.yillikDus){
+            dusRozet = (dPay > 0)
+              ? '<span class="pill kismi" title="Yasal hak aşıldı; aşan kısım yıllık izin bakiyesinden düşer">'+sayi(dPay)+' gün düşer</span>'
+              : '<span class="pill dusmez" title="Yıllık izin hakkından düşmez">düşmez</span>';
+          }
           return '<tr>'
             + '<td><span class="ddot" style="background:'+t.renk+'" title="'+esc(t.ad)+'"></span>'
               + '<span class="mono">'+trTarih(x.pay.bas)+'</span>'
               + (x.pay.kirpik?' <span class="pill kismi">kısmi</span>':'')+'</td>'
             + '<td><span class="mono">'+trTarih(x.pay.bit)+'</span></td>'
             + '<td class="num"><b>'+(saatliIzin(i) ? sayi(i.saat)+' sa' : sayi(x.pay.gun))+'</b>'
+            + dusRozet
             + (BEKLEYEN.includes(i.durum) ? '<span class="pill bekle">bekliyor</span>' : '')+'</td>'
             + '<td class="str dokumislem">'+ops+'</td></tr>';
         }).join('')
-      + '<tr class="dip"><td colspan="2"><b>Toplam</b></td><td class="num"><b>'+sayi(toplam)+'</b></td><td></td></tr>'
+      + '<tr class="dip"><td colspan="2"><b>Bakiyeden düşen</b></td><td class="num"><b>'+sayi(toplam)+'</b></td><td></td></tr>'
     : '<tr><td colspan="4"><div class="hint" style="padding:14px 0">Bu dönemde kayıt yok.</div></td></tr>')
   + '</tbody></table></div>'
+  + (ozelVar ? '<div class="hint dokumnot">Toplam yalnızca yıllık izin hakkından düşen günleri kapsar. Evlilik, doğum günü, babalık, ölüm gibi izinler listede görünür; yasal hakkı aşmadıkça bakiyeden düşmez.</div>' : '')
   + (S.dokumAyAcik ? '<div style="height:210px"></div>' : '')   // ay paneli açıkken kırpılmaması için yer aç
   + '</div>'
   + '<div class="mf"><button class="btn" onclick="dokumKapat()">Kapat</button></div>');
@@ -3187,10 +3228,11 @@ function izinHesapla(){
         : '<div class="hint" style="margin-top:6px">Talebiniz gönderilebilir, kararı yöneticiniz verir.</div>'));
   } else S.gerekceTaslak = '';
 
-  if(t.yillikDus && gun > b.kalan)
-    uyari += kutu('r','Bakiye yetersiz','Talep '+sayi(gun)+' gün, kullanılabilir bakiye '+sayi(b.kalan)+' gün. Talep yine de gönderilebilir, İK karar verir.');
+  const dusenSimdi = dusenGunTutar(tur, gun);          // bu talebin bakiyeden düşecek kısmı
+  if(dusenSimdi > b.kalan)
+    uyari += kutu('r','Bakiye yetersiz','Bakiyeden düşecek '+sayi(dusenSimdi)+' gün, kullanılabilir bakiye '+sayi(b.kalan)+' gün. Talep yine de gönderilebilir, İK karar verir.');
   if(t.hakGun && gun > t.hakGun)
-    uyari += kutu('b','Yasal hak aşılıyor',esc(t.ad)+' için kanuni süre '+t.hakGun+' gün. Aşan kısım yıllık izinden düşülebilir.');
+    uyari += kutu('b','Yasal hak aşılıyor',esc(t.ad)+' için kanuni süre '+t.hakGun+' gün. Aşan '+sayi(gun - t.hakGun)+' gün yıllık izin bakiyesinden düşülür.');
   if(cak.length)
     uyari += kutu('b','Aynı departmanda çakışma', cak.map(c=>esc(adSoyad(c.pid))+' ('+trTarih(c.bas)+' – '+trTarih(c.bit)+')').join(', '));
   if(!saatli && gun === 0)
@@ -3202,7 +3244,7 @@ function izinHesapla(){
   if(dk.tatil) dusen.push(dk.tatil+' resmî tatil');
   if(dk.arife) dusen.push(dk.arife+' arife'+(S.ayar.arifeYarim?' (yarım gün)':''));
 
-  const kalanSonra = t.yillikDus ? b.kalan - gun : b.kalan;
+  const kalanSonra = b.kalan - dusenSimdi;
   const donus = bit ? sonrakiIsGunu(bit) : '';
   const p = per(pid) || {};
   const onaylayan = p.yonetici ? adSoyad(p.yonetici) : 'İnsan Kaynakları';
@@ -3238,7 +3280,11 @@ function izinHesapla(){
       + '<div class="s">'
       + (saatli
           ? sayi(b.gunSaat)+' saat = 1 gün · biriken '+sayi(b.saatlikToplam)+' saat'
-          : t.yillikDus ? 'Şu anki bakiye '+sayi(b.kalan)+' gün' : esc(t.ad)+' bakiyeden düşmez')
+          : t.yillikDus
+              ? 'Şu anki bakiye '+sayi(b.kalan)+' gün'
+              : (dusenSimdi > 0
+                  ? 'Aşan '+sayi(dusenSimdi)+' gün bakiyeden düşer · şu an '+sayi(b.kalan)+' gün'
+                  : esc(t.ad)+' bakiyeden düşmez'))
       + '</div>'
     + '</div>'
     + '<div class="ozet-h o-onay">'
@@ -3265,10 +3311,9 @@ function projeksiyonBakiye(pid, bit, haricId, ekGun){
   let kullanim = 0;
   for(const i of S.izin){
     if(i.pid !== pid || i.id === haricId) continue;
-    if(!turBul(i.tur).yillikDus) continue;
     if(!(GECERLI.includes(i.durum) || BEKLEYEN.includes(i.durum))) continue;
     if(i.bas < bt || i.bas > bit) continue;                 // devir öncesi ve izin bitişinden sonrası hariç
-    kullanim += saatliIzin(i) ? (i.saat || 0) / gunSaat : (i.gun || 0);
+    kullanim += saatliIzin(i) ? (i.saat || 0) / gunSaat : dusenGun(i);   // düşmeyen türlerde yalnız aşan kısım
   }
   const kazanim = hakEdisler(pid, bit).reduce((a, x) => a + x.gun, 0);
   return devir + kazanim - kullanim - (ekGun || 0);
@@ -3276,9 +3321,13 @@ function projeksiyonBakiye(pid, bit, haricId, ekGun){
 /* Eksiye düşme sınırı kontrolü — geçerse null, aşarsa uyarı metni döner */
 function eksiSinirUyari(pid, tur, bit, ekGun, haricId){
   if(!S.ayar.eksiKuraliAktif) return null;                  // kural kapalıyken hiç uygulanmaz
-  if(!turBul(tur).yillikDus) return null;                   // yıllıktan düşmeyen türler sınırsız
+  const t = turBul(tur);
+  // Bu talebin bakiyeden düşecek kısmı (düşmeyen türlerde yalnız yasal hakkı aşan gün)
+  const ekDusen = t.yillikDus ? (ekGun || 0)
+                : (t.hakGun && (ekGun || 0) > t.hakGun ? (ekGun - t.hakGun) : 0);
+  if(ekDusen <= 0) return null;                             // hiç düşmüyorsa sınır uygulanmaz
   const sinir = Math.max(0, Number(S.ayar.eksiSiniri) || 0);
-  const proj = projeksiyonBakiye(pid, bit, haricId || null, ekGun);
+  const proj = projeksiyonBakiye(pid, bit, haricId || null, ekDusen);
   if(proj >= -sinir - 1e-9) return null;
   return adSoyad(pid)+' için bu izin bakiyeyi '+sayi(Math.round((-proj)*10)/10)+' gün eksiye düşürüyor; '
     + (sinir > 0 ? 'izin verilen eksi sınırı '+sayi(sinir)+' gün.' : 'eksiye izin verilmiyor.')
