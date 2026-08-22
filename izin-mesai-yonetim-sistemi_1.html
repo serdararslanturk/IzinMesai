@@ -221,8 +221,10 @@ select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml
 .dtbl.dokum td.num .pill{margin-left:8px}
 .dtbl.dokum tr.dip td{background:#EEF6FC; border-top:2px solid #9CC4E4; padding-top:12px; padding-bottom:12px}
 .dtbl.dokum tr.dip:hover td{background:#EEF6FC}
-.dtbl.dokum .cokbtn{background:#fff; border-color:#BFD8ED; color:#215C8C; font-weight:600; border-radius:7px}
-.dtbl.dokum .cokbtn.dolu{background:#EAF4FC}
+.coksec.dokumay{margin-top:0; vertical-align:middle}
+.coksec.dokumay .cokbtn{width:auto; background:#fff; border-color:#BFD8ED; color:#215C8C; font-weight:600; border-radius:7px}
+.coksec.dokumay .cokbtn.dolu{background:#EAF4FC}
+.coksec.dokumay .cokpan{left:auto; right:0}
 .ddot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:9px; vertical-align:middle;
   box-shadow:0 0 0 3px rgba(20,60,90,.06)}
 .pill.bekle{background:#FFF3D4; color:#8A6A16; border-color:#EEDBA0}
@@ -2871,15 +2873,17 @@ function izinDokumCiz(){
     + '<span class="lb" style="margin-left:auto">Yıl</span>'
     + '<select style="width:auto" onchange="dokumYilSec(this.value)">'
     + yillar.map(y => '<option value="'+y+'"'+(y===yil?' selected':'')+'>'+y+'</option>').join('')+'</select>'
-  + '</div>'
-  + '<div class="mt"><table class="dtbl dokum"><thead><tr>'
-    + '<th>Başlangıç <div class="coksec" style="display:inline-block;margin-left:4px;vertical-align:middle">'
-      + '<button type="button" class="cokbtn'+((S.dokumAylar&&S.dokumAylar.length)?' dolu':'')+'" style="min-width:104px;padding:4px 8px" onclick="event.stopPropagation();dokumAyToggle()"><span>'
+    + '<span class="lb">Ay</span>'
+    + '<div class="coksec dokumay">'
+      + '<button type="button" class="cokbtn'+((S.dokumAylar&&S.dokumAylar.length)?' dolu':'')+'" style="min-width:104px;padding:5px 10px" onclick="event.stopPropagation();dokumAyToggle()"><span>'
         + ((S.dokumAylar&&S.dokumAylar.length) ? (S.dokumAylar.length===1?esc(AY[S.dokumAylar[0]]):S.dokumAylar.length+' ay') : 'Tüm yıl')+'</span><i>▾</i></button>'
       + (S.dokumAyAcik ? '<div class="cokpan" onclick="event.stopPropagation()"><div class="cokust"><b>Ay</b>'
           + '<button type="button" onclick="dokumAySec(null)">'+((S.dokumAylar&&S.dokumAylar.length>=12) ? 'Temizle' : 'Tümünü seç')+'</button></div>'
           + '<div class="coklist aygrid">'+AY.map((a,ix)=>'<label><input type="checkbox" '+((S.dokumAylar||[]).includes(ix)?'checked':'')+' onchange="dokumAySec('+ix+')"><span>'+esc(a)+'</span></label>').join('')+'</div></div>' : '')
-      + '</div></th>'
+    + '</div>'
+  + '</div>'
+  + '<div class="mt"><table class="dtbl dokum"><thead><tr>'
+    + '<th>Başlangıç</th>'
     + '<th>Bitiş</th><th class="num">Gün</th><th></th></tr></thead><tbody>'
   + (satirlar.length
     ? satirlar.map(x => {
