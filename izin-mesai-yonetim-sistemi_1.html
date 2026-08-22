@@ -1757,7 +1757,7 @@ function onayVazgec(){
   if(geri){ $('#modal').innerHTML = geri; }
   else modalKapat();
 }
-function modalKapat(){ S.kayitKisi = null; S.kayitTip = ''; S.kayitAralik = null; S.onayIslemi = null; S.onayGeri = null; $('#ov').classList.remove('on'); const m=$('#modal'); m.className='modal'; m.innerHTML = ''; }
+function modalKapat(){ S.kayitKisi = null; S.kayitTip = ''; S.kayitAralik = null; S.onayIslemi = null; S.onayGeri = null; S.dokumGeri = null; $('#ov').classList.remove('on'); const m=$('#modal'); m.className='modal'; m.innerHTML = ''; }
 
 /* ===================== TANIM LİSTELERİ ve AÇILIR ALANLAR ===================== */
 
@@ -2796,11 +2796,23 @@ function mesaiAySec(ix){ if(ix===null){ mesaiAyF = tumunuSecToggle(mesaiAyF, [..
 
 function izinDokum(pid, yil){
   if(!gorebilir(pid)){ bildir('Bu kişinin kayıtlarını görme yetkiniz yok.'); return; }
+  // Kayıtlar penceresinden açıldıysa (S.kayitKisi dolu), döküm kapanınca oraya dönülsün
+  S.dokumGeri = S.kayitKisi ? {kisi:S.kayitKisi, tip:S.kayitTip, aralik:S.kayitAralik} : null;
   S.dokumKisi = pid;
   if(yil !== undefined) S.dokumYil = Number(yil);
   if(S.dokumYil === undefined) S.dokumYil = S.yil;
   S.dokumAylar = []; S.dokumAyAcik = false;
   izinDokumCiz();
+}
+/* Döküm penceresini kapat: Kayıtlar'dan açıldıysa oraya geri dön, değilse tamamen kapat */
+function dokumKapat(){
+  const g = S.dokumGeri;
+  S.dokumGeri = null;
+  if(g){
+    kisiKayitlari(g.kisi, g.tip, g.aralik ? g.aralik.bas : undefined, g.aralik ? g.aralik.bit : undefined);
+  } else {
+    modalKapat();
+  }
 }
 function dokumYilSec(y){ S.dokumYil = Number(y); izinDokumCiz(); }
 function dokumAyToggle(){ S.dokumAyAcik = !S.dokumAyAcik; izinDokumCiz(); }
@@ -2841,7 +2853,7 @@ function izinDokumCiz(){
   for(let y = ilkYil(); y <= Math.max(S.yil, new Date().getFullYear()) + 1; y++) yillar.push(y);
 
   modalAc('<div class="mh"><h3 class="mbaslik">KULLANIM DÖKÜMÜ</h3>'
-  + '<button class="x" onclick="modalKapat()">×</button></div><div class="mb">'
+  + '<button class="x" onclick="dokumKapat()">×</button></div><div class="mb">'
   + '<div class="row" style="margin-bottom:10px;gap:8px;align-items:center;flex-wrap:wrap">'
     + '<span class="hint">'+esc(adSoyad(pid))+' · kullanılan ve onay bekleyen izinler</span>'
     + '<span class="lb" style="margin-left:auto">Yıl</span>'
@@ -2876,7 +2888,7 @@ function izinDokumCiz(){
   + '</tbody></table></div>'
   + (S.dokumAyAcik ? '<div style="height:210px"></div>' : '')   // ay paneli açıkken kırpılmaması için yer aç
   + '</div>'
-  + '<div class="mf"><button class="btn" onclick="modalKapat()">Kapat</button></div>');
+  + '<div class="mf"><button class="btn" onclick="dokumKapat()">Kapat</button></div>');
 }
 
 /* ===================== 7. TALEP FORMLARI ===================== */
@@ -4498,17 +4510,6 @@ function kisiKayitlariCiz(){
         + '</div>'
       : '')
 
-  + (S.kayitTip === 'mesai' ? '' :
-      '<div class="lb" style="margin-top:16px">İzin kayıtları · '+esc(donemAd)+' ('+izinler.length+')</div>'
-      + '<div style="border:1px solid var(--line);border-radius:8px;margin-top:7px;overflow:hidden">'
-      + (izinler.length ? izinler.map(izinSatir).join('') : '<div class="hint" style="padding:14px">Kayıt yok.</div>')
-      + '</div>')
-
-  + (S.kayitTip === 'izin' ? '' :
-      '<div class="lb" style="margin-top:16px">Mesai kayıtları · '+esc(donemAd)+' ('+mesailer.length+')</div>'
-      + '<div style="border:1px solid var(--line);border-radius:8px;margin-top:7px;overflow:hidden">'
-      + (mesailer.length ? mesailer.map(mesaiSatir).join('') : '<div class="hint" style="padding:14px">Kayıt yok.</div>')
-      + '</div>')
   + '</div><div class="mf">'
   + (izinGirebilir(pid)
       ? (mesaiGorunum
