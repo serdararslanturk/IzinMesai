@@ -401,6 +401,8 @@ button.basliksec i{font-style:normal; opacity:.6; flex:none}
 .fsat select{padding-right:24px; background-position:right 6px center}
 .fsat input::placeholder{font-weight:400; text-transform:none; letter-spacing:0}
 th .fsat input:focus, th .fsat select:focus{border-color:var(--brand)}
+/* Sağdaki sütunların filtre paneli sağa hizalı açılsın (kenardan taşmasın) */
+.coksec.sagac .cokpan{left:auto; right:0}
 .card .hd .secim{display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--ink2);
   cursor:pointer; white-space:nowrap; padding:6px 10px; border:1px solid var(--line); border-radius:8px;
   background:var(--surface)}
@@ -2371,10 +2373,10 @@ function cokSecici(anahtar, secenekler, secili, degisFn, gridli){
 
 
 /* Sütun başlığı içinde çoklu seçim: başlık metni tıklanınca dropdown açılır */
-function baslikSecici(anahtar, etiket, secenekler, secili, fn, gridli){
+function baslikSecici(anahtar, etiket, secenekler, secili, fn, gridli, saga){
   const acik = S.acikSecici === anahtar;
   const et = !secili.length ? etiket : secili.length === 1 ? secili[0] : etiket+' · '+secili.length;
-  return '<div class="coksec">'
+  return '<div class="coksec'+(saga?' sagac':'')+'">'
     + '<button type="button" class="basliksec cokbtn'+(secili.length?' dolu':'')+'"'
     + ' title="'+esc(secili.length ? secili.join(', ') : etiket)+'"'
     + ' onclick="event.stopPropagation();seciciAc(\''+anahtar+'\')">'
@@ -4763,9 +4765,118 @@ function takvimListesi(kayitlar){
 
 /* ===================== 10. PERSONEL YÖNETİMİ ===================== */
 
-let pFiltre = {q:'', dept:'', lok:'', yon:'', rol:''};
-function pFiltreDegis(alan, deger){ pFiltre[alan] = deger; ciz(); }
-function pTemizle(){ pFiltre = {q:'', dept:'', lok:'', yon:'', rol:''}; ciz(); }
+let pFiltre = {q:'', dept:[], altdept:[], unvan:[], lok:[], yon:[], rol:[]};
+function pTemizle(){ pFiltre = {q:'', dept:[], altdept:[], unvan:[], lok:[], yon:[], rol:[]}; ciz(); }
+
+/* Başlık-içi çoklu seçim filtreleri için seçenek listeleri (render ile handler aynı sırayı kullanır) */
+const ROL_ETIKET = {personel:'Personel', yonetici:'Yönetici', ustyonetim:'Üst yönetim', ik:'İK'};
+function pDeptOps(){ return [...new Set(S.personel.map(p=>p.dept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function pAltOps(){ return [...new Set(S.personel.map(p=>p.altDept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function pUnvanOps(){ return [...new Set(S.personel.map(p=>p.unvan).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function pLokOps(){ return [...new Set(S.personel.map(p=>p.lokasyon).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function pYonOps(){ return [...new Set(S.personel.filter(p=>p.yonetici).map(p=>adSoyad(p.yonetici)))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function pRolOps(){ return ['Personel','Yönetici','Üst yönetim','İK','Mesai kapalı']; }
+function pCokSec(alan, ops, i){
+  if(i === null){ pFiltre[alan] = tumunuSecToggle(pFiltre[alan], ops.slice()); ciz(); return; }
+  const v = ops[i]; if(v === undefined) return;
+  const j = pFiltre[alan].indexOf(v); if(j < 0) pFiltre[alan].push(v); else pFiltre[alan].splice(j,1);
+  ciz();
+}
+function pDeptSec(i){ pCokSec('dept', pDeptOps(), i); }
+function pAltSec(i){ pCokSec('altdept', pAltOps(), i); }
+function pUnvanSec(i){ pCokSec('unvan', pUnvanOps(), i); }
+function pLokSec(i){ pCokSec('lok', pLokOps(), i); }
+function pYonSec(i){ pCokSec('yon', pYonOps(), i); }
+function pRolSec(i){ pCokSec('rol', pRolOps(), i); }
+
+/* Personel listesinde satır-içi seçim: departman / alt departman / lokasyon / yönetici */
+function pAltDeptSecici(p){
+  const liste = altDeptListesi(p.dept);
+  const disBagli = p.altDept && !liste.includes(p.altDept);   // başka departmana bağlı ama atanmış
+  return '<select id="pAlt_'+p.id+'" onclick="event.stopPropagation()" onchange="pSatirGuncelle(\''+p.id+'\',\'altDept\',this.value)" '
+    + 'style="width:100%;font-size:12.5px">'
+    + '<option value="">— alt departman —</option>'
+    + liste.map(x=>'<option'+(x===p.altDept?' selected':'')+'>'+esc(x)+'</option>').join('')
+    + (disBagli ? '<option selected>'+esc(p.altDept)+'</option>' : '')
+    + '<option value="__duzen__">⚙ Ekle / sil…</option>'
+    + '</select>';
+}
+function pUnvanSecici(p){
+  const liste = unvanListesi(p.dept);
+  const disBagli = p.unvan && !liste.includes(p.unvan);
+  return '<select id="pUnv_'+p.id+'" onclick="event.stopPropagation()" onchange="pSatirGuncelle(\''+p.id+'\',\'unvan\',this.value)" '
+    + 'style="width:100%;font-size:12.5px">'
+    + '<option value="">— unvan —</option>'
+    + liste.map(x=>'<option'+(x===p.unvan?' selected':'')+'>'+esc(x)+'</option>').join('')
+    + (disBagli ? '<option selected>'+esc(p.unvan)+'</option>' : '')
+    + '<option value="__duzen__">⚙ Ekle / sil…</option>'
+    + '</select>';
+}
+function pSatirGuncelle(pid, alan, deger){
+  const p = per(pid); if(!p) return;
+  if(deger === '__duzen__'){                                    // "Ekle / sil…" → liste tablosu açılır
+    const key = {dept:'dept', altDept:'altdept', unvan:'unvan', lokasyon:'lokasyon'}[alan];
+    ciz(); listeYonetAc(key); return;
+  }
+  p[alan] = deger;
+  if(alan === 'dept'){
+    // yeni departmana uymayan alt departman ve unvanı temizle, o satırın seçicilerini tazele
+    if(p.altDept && altDeptDepti(p.altDept) && altDeptDepti(p.altDept) !== deger) p.altDept = '';
+    if(p.unvan && unvanDepti(p.unvan) && unvanDepti(p.unvan) !== deger) p.unvan = '';
+    const sa = document.getElementById('pAlt_'+pid);  if(sa) sa.outerHTML = pAltDeptSecici(p);
+    const su = document.getElementById('pUnv_'+pid);   if(su) su.outerHTML = pUnvanSecici(p);
+  }
+  kaydet();
+}
+
+/* Satırdan yeni departman / alt departman / lokasyon tanımlama */
+function pYeniDeger(pid, alan){
+  const p = per(pid); if(!p) return;
+  const ad = {dept:'Departman', altDept:'Alt departman', unvan:'Unvan', lokasyon:'Lokasyon'}[alan] || 'Değer';
+  const bag = (alan==='altDept' || alan==='unvan')
+    ? '<div class="hint mt">“'+esc(p.dept||'—')+'” departmanına bağlanacak.</div>' : '';
+  modalAc('<div class="mh"><h3>'+ad+' ekle</h3><button class="x" onclick="pYeniVazgec()">×</button></div>'
+  + '<div class="mb"><div class="fld"><label class="lb">'+ad+' adı</label>'
+  + '<input type="text" id="pyeni_ad" autofocus onkeydown="if(event.key===\'Enter\')pYeniKaydet(\''+pid+'\',\''+alan+'\')"></div>'
+  + '<div class="hint mt">'+esc(p.ad+' '+p.soyad)+' kaydına atanacak.</div>'+bag+'</div>'
+  + '<div class="mf"><button class="btn" onclick="pYeniVazgec()">Vazgeç</button>'
+  + '<button class="btn pri" onclick="pYeniKaydet(\''+pid+'\',\''+alan+'\')">Ekle ve ata</button></div>');
+}
+function pYeniVazgec(){ modalKapat(); ciz(); }   // seçici gerçek değere dönsün diye yeniden çiz
+function pYeniKaydet(pid, alan){
+  const p = per(pid); if(!p) return;
+  const v = (document.getElementById('pyeni_ad').value || '').trim();
+  if(!v){ bildir('Bir ad yazın.'); return; }
+  if(alan === 'dept'){
+    listeEkle('dept', v); p.dept = v;
+    if(p.altDept && altDeptDepti(p.altDept) && altDeptDepti(p.altDept) !== v) p.altDept = '';
+  } else if(alan === 'altDept'){
+    listeEkle('altdept', v);
+    S.ayar.altDeptDept = S.ayar.altDeptDept || {};
+    if(S.ayar.altDeptDept[v] === undefined) S.ayar.altDeptDept[v] = p.dept || '';
+    p.altDept = v;
+  } else if(alan === 'unvan'){
+    listeEkle('unvan', v);
+    S.ayar.unvanDept = S.ayar.unvanDept || {};
+    if(S.ayar.unvanDept[v] === undefined) S.ayar.unvanDept[v] = p.dept || '';
+    p.unvan = v;
+  } else if(alan === 'lokasyon'){
+    listeEkle('lokasyon', v); p.lokasyon = v;
+  }
+  modalKapat(); kaydet();
+  bildir('“'+v+'” eklendi ve atandı.');
+}
+/* Satırdaki departman/alt departman/unvan/lokasyon değerini listeden siler
+   (kullanımdaysa hedef değer sorulur — Ayarlar'daki güvenli silme akışı). */
+function pDegerSil(pid, alan){
+  const p = per(pid); if(!p){ ciz(); return; }
+  const key = {dept:'dept', altDept:'altdept', unvan:'unvan', lokasyon:'lokasyon'}[alan];
+  const deger = p[alan];
+  if(!deger){ bildir('Bu satırda silinecek bir değer yok.'); ciz(); return; }
+  const ix = listeAl(key).indexOf(deger);
+  if(ix < 0){ ciz(); return; }
+  listeSil(key, ix);   // kullanımdaysa taşıma sorar, boştaysa doğrudan siler
+}
 function pAra(v){
   pFiltre.q = v; ciz();
   const el = document.getElementById('pAraKutu');
@@ -4773,13 +4884,15 @@ function pAra(v){
 }
 
 function vPersonel(){
-  const depts = [...new Set(S.personel.map(p=>p.dept))].sort((a,b)=>a.localeCompare(b,'tr'));
-  const loks = [...new Set(S.personel.map(p=>p.lokasyon||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));
+  const deptListe = listeAl('dept'), lokListe = listeAl('lokasyon');
+  const herkes = S.personel.slice().sort((a,b)=>(a.ad+' '+a.soyad).localeCompare(b.ad+' '+b.soyad,'tr'));
   let liste = S.personel.filter(p =>
-    (!pFiltre.dept || p.dept === pFiltre.dept) &&
-    (!pFiltre.lok || p.lokasyon === pFiltre.lok) &&
-    (!pFiltre.yon || p.yonetici === pFiltre.yon) &&
-    (!pFiltre.rol || (pFiltre.rol === 'mesaikapali' ? p.mesaiKapali === true : (p.rol || 'personel') === pFiltre.rol)) &&
+    (!pFiltre.dept.length || pFiltre.dept.includes(p.dept)) &&
+    (!pFiltre.altdept.length || pFiltre.altdept.includes(p.altDept||'')) &&
+    (!pFiltre.unvan.length || pFiltre.unvan.includes(p.unvan||'')) &&
+    (!pFiltre.lok.length || pFiltre.lok.includes(p.lokasyon||'')) &&
+    (!pFiltre.yon.length || pFiltre.yon.includes(p.yonetici ? adSoyad(p.yonetici) : '')) &&
+    (!pFiltre.rol.length || pFiltre.rol.some(lbl => lbl === 'Mesai kapalı' ? p.mesaiKapali === true : (ROL_ETIKET[p.rol||'personel'] === lbl))) &&
     (!pFiltre.q || (p.ad+' '+p.soyad+' '+(p.tcno||'')+' '+p.unvan).toLocaleLowerCase('tr').includes(pFiltre.q.toLocaleLowerCase('tr'))));
   liste.sort((a,b)=>a.dept.localeCompare(b.dept,'tr')||a.ad.localeCompare(b.ad,'tr'));
 
@@ -4789,27 +4902,20 @@ function vPersonel(){
     + '<button class="btn" onclick="disaAktar()">CSV dışa aktar</button>'
     + '<button class="btn pri" onclick="personelForm()">+ Personel ekle</button></div></div>';
 
-  const filtreVar = pFiltre.q || pFiltre.dept || pFiltre.lok || pFiltre.rol;
-  const yonler = [...new Set(S.personel.filter(p=>p.yonetici).map(p=>p.yonetici))]
-    .map(id => ({id, ad: adSoyad(id)})).sort((a,b) => a.ad.localeCompare(b.ad,'tr'));
+  const filtreVar = pFiltre.q || pFiltre.dept.length || pFiltre.altdept.length || pFiltre.unvan.length || pFiltre.lok.length || pFiltre.yon.length || pFiltre.rol.length;
 
   h += '<div class="card"><div class="hd">'
     + '<span class="hint">'+liste.length+' kayıt</span>'
     + (filtreVar ? '<button class="btn sm" onclick="pTemizle()">Filtreyi temizle</button>' : '')
-    + '<div class="sp hint" style="font-size:11.5px">Sütun başlıklarından süzebilir, düzenlemek için satıra tıklayabilirsiniz</div></div>'
+    + '<div class="sp hint" style="font-size:11.5px">Başlıktan süzün · alanları satırdan seçin · açılırdaki “Ekle / sil…” ile o listenin tüm değerlerini görüp ekleyip silebilirsiniz</div></div>'
     + '<div class="bd flush"><div class="twpair">' + ustCubuk() + '<div class="tw"><table class="ptbl"><thead><tr>'
-    + '<th class="stl">Ad soyad<div class="fsat">'
-      + '<input type="text" id="pAraKutu" placeholder="Ad, T.C. no, unvan…" value="'+esc(pFiltre.q)+'" oninput="pAra(this.value)"></div></th>'
-    + '<th>Departman<div class="fsat"><select onchange="pFiltreDegis(\'dept\',this.value)"><option value="">Tümü</option>'
-      + depts.map(x=>'<option'+(x===pFiltre.dept?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div></th>'
-    + '<th>Lokasyon<div class="fsat"><select onchange="pFiltreDegis(\'lok\',this.value)"><option value="">Tümü</option>'
-      + loks.map(x=>'<option'+(x===pFiltre.lok?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div></th>'
-    + '<th>Unvan</th><th>Kıdem tarihi</th><th class="num">Kıdem</th>'
-    + '<th>Bağlı olduğu yönetici<div class="fsat"><select onchange="pFiltreDegis(\'yon\',this.value)"><option value="">Tümü</option>'
-      + yonler.map(y=>'<option value="'+y.id+'"'+(y.id===pFiltre.yon?' selected':'')+'>'+esc(y.ad)+'</option>').join('')+'</select></div></th>'
-    + '<th>Yetki<div class="fsat"><select onchange="pFiltreDegis(\'rol\',this.value)"><option value="">Tümü</option>'
-      + [['personel','Personel'],['yonetici','Yönetici'],['ustyonetim','Üst yönetim'],['ik','İK'],['mesaikapali','Mesai kapalı']]
-          .map(x=>'<option value="'+x[0]+'"'+(x[0]===pFiltre.rol?' selected':'')+'>'+x[1]+'</option>').join('')+'</select></div></th>'
+    + '<th class="stl"><input type="text" class="basliksec" id="pAraKutu" placeholder="Ad soyad ara…" value="'+esc(pFiltre.q)+'" oninput="pAra(this.value)"></th>'
+    + '<th>'+baslikSecici('pDept','Departman', pDeptOps(), pFiltre.dept, 'pDeptSec')+'</th>'
+    + '<th>'+baslikSecici('pAlt','Alt departman', pAltOps(), pFiltre.altdept, 'pAltSec')+'</th>'
+    + '<th>'+baslikSecici('pLok','Lokasyon', pLokOps(), pFiltre.lok, 'pLokSec')+'</th>'
+    + '<th>'+baslikSecici('pUnv','Unvan', pUnvanOps(), pFiltre.unvan, 'pUnvanSec', false, true)+'</th>'
+    + '<th>İzin kıdem tarihi</th><th class="num">Kıdem</th><th class="num">Ücret</th>'
+    + '<th>'+baslikSecici('pYon','Yönetici', pYonOps(), pFiltre.yon, 'pYonSec', false, true)+'</th>'
     + '<th class="num">Kalan izin</th><th class="num">Hak ediş sonrası</th><th>Sonraki hak ediş</th>'
     + '<th class="str">Kart</th></tr></thead><tbody>';
 
@@ -4818,21 +4924,32 @@ function vPersonel(){
     h += '<tr onclick="personelForm(\''+p.id+'\')" title="Kartı açmak için tıklayın"'
       +(p.aktif?'':' style="opacity:.5"')+'>'
       + '<td class="stl" style="font-weight:600">'+esc(p.ad+' '+p.soyad)+(p.aktif?'':' <span class="pill">Pasif</span>')+'</td>'
-      + '<td>'+esc(p.dept)+(p.altDept?'<div class="hint" style="font-size:11.5px">'+esc(p.altDept)+'</div>':'')+'</td><td class="hint">'+esc(p.lokasyon||'—')+'</td><td class="hint">'+esc(p.unvan)+'</td>'
-      + '<td class="mono" style="font-size:12.5px" title="İşe giriş: '+trTarih(p.giris)+'">'+trTarih(p.kidem||p.giris)+'</td>'
+      + '<td onclick="event.stopPropagation()">'
+        + '<select onchange="pSatirGuncelle(\''+p.id+'\',\'dept\',this.value)" style="width:100%;font-size:12.5px">'
+        + deptListe.map(x=>'<option'+(x===p.dept?' selected':'')+'>'+esc(x)+'</option>').join('')
+        + '<option value="__duzen__">⚙ Ekle / sil…</option></select>'
+      + '</td>'
+      + '<td onclick="event.stopPropagation()">'+pAltDeptSecici(p)+'</td>'
+      + '<td onclick="event.stopPropagation()">'
+        + '<select onchange="pSatirGuncelle(\''+p.id+'\',\'lokasyon\',this.value)" style="width:100%;font-size:12.5px">'
+        + '<option value="">—</option>'
+        + lokListe.map(x=>'<option'+(x===(p.lokasyon||'')?' selected':'')+'>'+esc(x)+'</option>').join('')
+        + '<option value="__duzen__">⚙ Ekle / sil…</option></select>'
+      + '</td>'
+      + '<td onclick="event.stopPropagation()">'+pUnvanSecici(p)+'</td>'
+      + '<td class="mono" style="font-size:12.5px" title="İşe giriş: '+trTarih(p.giris)+'">'+trTarih(p.izinKidem||p.kidem||p.giris)+'</td>'
       + '<td class="num">'+kidemYili(p.id,S.yil)+'</td>'
-      + '<td class="hint">'+(p.yonetici?esc(adSoyad(p.yonetici)):'—')+'</td>'
-      + '<td>'+(p.mesaiKapali?'<span class="pill" title="Bu kişi için mesai kaydı girilemez">Mesai kapalı</span> ':'')
-          + (p.rol==='ik'?'<span class="tag m"><i class="dot"></i>İK</span>'
-          :p.rol==='ustyonetim'?'<span class="tag o"><i class="dot"></i>Üst yönetim</span>'
-          :p.rol==='yonetici'?'<span class="tag n"><i class="dot"></i>Yönetici</span>'
-          :'<span class="hint">Personel</span>')+'</td>'
+      + '<td class="num mono" style="white-space:nowrap" title="'+esc((p.ucretTipi==='gunluk'?'Günlük':'Aylık')+' · '+(p.netBrut==='brut'?'Brüt':'Net'))+'">'+(p.ucret?para(p.ucret):'—')+'</td>'
+      + '<td onclick="event.stopPropagation()">'
+        + '<select onchange="pSatirGuncelle(\''+p.id+'\',\'yonetici\',this.value)" style="width:100%;font-size:12px">'
+        + '<option value="">— yok —</option>'
+        + herkes.filter(x=>x.id!==p.id).map(x=>'<option value="'+x.id+'"'+(x.id===p.yonetici?' selected':'')+'>'+esc(x.ad+' '+x.soyad)+'</option>').join('')+'</select>'
+      + '</td>'
       + '<td class="num" style="font-weight:700">'+sayi(b.kalan)+'</td>'
       + '<td class="num">'+sayi(b.yilSonuKalan)+'</td>'
       + '<td class="hint" style="white-space:nowrap">'+(b.sonraki ? trTarih(b.sonraki.tarih)+' <span class="pill">+'+b.sonraki.gun+'</span>' : '—')+'</td>'
       + '<td class="str">'
-      + '<button class="btn sm" onclick="event.stopPropagation();kisiKayitlari(\''+p.id+'\')">Kayıtlar</button> '
-      + '<button class="btn sm" onclick="event.stopPropagation();personelForm(\''+p.id+'\')">Düzenle</button></td></tr>';
+      + '<button class="btn sm" onclick="event.stopPropagation();kisiKayitlari(\''+p.id+'\')">Kayıtlar</button></td></tr>';
   }
   h += '</tbody></table></div></div></div></div>';
   return h;
@@ -5298,8 +5415,8 @@ function vRapor(){
     h += '<div class="twpair">'+ustCubuk()+'<div class="tw"><table class="ptbl"><thead><tr>'
       + '<th class="stl">Personel<div class="fsat">'
         + '<input type="text" id="rapAraKutu" placeholder="Ara…" value="'+esc(rapF.q)+'" oninput="rapAra(this.value)"></div></th>'
-      + '<th>Departman'+cokSecici('rapDept', depts, rapF.dept, 'rapDeptSec')+'</th>'
-      + '<th>Lokasyon'+cokSecici('rapLok', loks, rapF.lok, 'rapLokSec')+'</th>'
+      + '<th>'+baslikSecici('rapDept','Departman', depts, rapF.dept, 'rapDeptSec')+'</th>'
+      + '<th>'+baslikSecici('rapLok','Lokasyon', loks, rapF.lok, 'rapLokSec')+'</th>'
       + '<th class="num">Kıdem</th><th class="num">Dönem başı</th><th class="num">Kullanılan</th>'
       + '<th class="num">Güncel kalan</th><th class="num">Hak edişten gelecek</th>'
       + '<th class="num">Hak ediş sonrası</th><th>Sonraki hak ediş</th>'
@@ -5550,11 +5667,11 @@ function vMesaiListe(){
     h += '<div class="twpair">'+ustCubuk()+'<div class="tw"><table class="ptbl"><thead><tr>'
       + '<th class="stl">Personel<div class="fsat">'
         + '<input type="text" id="msAraKutu" placeholder="Ara…" value="'+esc(msF.q)+'" oninput="msAra(this.value)"></div></th>'
-      + '<th>Departman'+cokSecici('msDept', depts, msF.dept, 'msDeptSec')+'</th>'
-      + '<th>Lokasyon'+cokSecici('msLok', loks, msF.lok, 'msLokSec')+'</th>'
+      + '<th>'+baslikSecici('msDept','Departman', depts, msF.dept, 'msDeptSec')+'</th>'
+      + '<th>'+baslikSecici('msLok','Lokasyon', loks, msF.lok, 'msLokSec')+'</th>'
       + '<th>Tarih</th><th>Saat</th><th class="num">Süre</th>'
       + '<th class="num">Tutar</th>'
-      + '<th>Durum'+cokSecici('msDurum', msDurumlar(), msF.durum, 'msDurumSec')+'</th>'
+      + '<th>'+baslikSecici('msDurum','Durum', msDurumlar(), msF.durum, 'msDurumSec', false, true)+'</th>'
       + '<th class="str"></th></tr></thead><tbody>';
     for(const m of kayitlar){
       const p = per(m.pid) || {}, t = mturBul(m.tur);
@@ -5688,10 +5805,10 @@ function msOzetTablo(kayitlar, depts, loks){
   let h = '<div class="bd flush"><div class="twpair">'+ustCubuk()+'<div class="tw"><table class="ptbl"><thead><tr>'
     + '<th class="stl">Personel<div class="fsat">'
       + '<input type="text" id="msAraKutu" placeholder="Ara…" value="'+esc(msF.q)+'" oninput="msAra(this.value)"></div></th>'
-    + '<th>Departman'+cokSecici('msDept_o', depts, msF.dept, 'msDeptSec')+'</th>'
-    + '<th>Lokasyon'+cokSecici('msLok_o', loks, msF.lok, 'msLokSec')+'</th>'
+    + '<th>'+baslikSecici('msDept_o','Departman', depts, msF.dept, 'msDeptSec')+'</th>'
+    + '<th>'+baslikSecici('msLok_o','Lokasyon', loks, msF.lok, 'msLokSec')+'</th>'
     + '<th class="num">Toplam saat</th><th class="num">Tutar</th>'
-    + '<th>Durum'+cokSecici('msDurum_o', msDurumlar(), msF.durum, 'msDurumSec')+'</th>'
+    + '<th>'+baslikSecici('msDurum_o','Durum', msDurumlar(), msF.durum, 'msDurumSec', false, true)+'</th>'
     + '<th class="str"></th></tr></thead><tbody>';
 
   for(const g of satirlar){
@@ -6313,8 +6430,8 @@ function vAyar(){
     + 'Yönetici alt kadronun tamamını görür: bir bölge yöneticisinin altındaki sorumlunun ekibi de listeye dahildir. '
     + 'Bekleyen onaylar listesine ise yalnızca doğrudan bağlı kişilerin talepleri düşer.</div></div></div>';
 
-  h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Departman ve unvanlar</h3>'
-    + '<div class="sp"><span class="hint">Departmana tıklayınca unvanları açılır</span>'
+  h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Departman, alt departman ve unvanlar</h3>'
+    + '<div class="sp"><span class="hint">Departmana tıklayınca alt departman ve unvanları açılır</span>'
     + '<button class="btn sm" onclick="deptHepsi('+(deptAcikSayisi()?'false':'true')+')">'
     + (deptAcikSayisi() ? 'Tümünü kapat' : 'Tümünü aç')+'</button></div></div>'
     + '<div class="bd flush">' + deptUnvanTablo() + '</div>'
@@ -6324,7 +6441,7 @@ function vAyar(){
     + '<button class="btn pri" onclick="deptEkleUygula()">Departman ekle</button></div>'
     + '<div class="hint" style="margin-top:8px">Personel sütunu o değerin kaç kişide kullanıldığını gösterir. '
     + 'Silinen bir değer kullanımdaysa ilgili kayıtların nereye taşınacağı sorulur; bir departmanı silerseniz '
-    + 'ona bağlı unvanlar da hedef departmana geçer.</div></div></div>';
+    + 'ona bağlı alt departman ve unvanlar da hedef departmana geçer.</div></div></div>';
 
   h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Özel kurallar</h3>'
     + '<div class="sp"><span class="hint">Birbirinin yerine bakan kişiler ve yedeklilik kuralı</span>'
@@ -6358,23 +6475,6 @@ function vAyar(){
         + '<button class="btn sm no" onclick="listeSil(\'lokasyon\','+ix+')">Sil</button></td></tr>').join('')
       : '<tr><td colspan="3" class="hint" style="padding:16px;text-align:center">Liste boş</td></tr>')
     + '</tbody></table></div></div></div>';
-
-  h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Alt departmanlar</h3>'
-    + '<div class="sp"><span class="hint">Her alt departman bir departmana bağlıdır</span>'
-    + '<button class="btn sm" onclick="listeYonetAc(\'altdept\')">Ekle / sil</button></div></div>'
-    + '<div class="bd flush"><div class="tw"><table><thead><tr><th>Alt departman</th><th>Bağlı departman</th><th class="num">Personel</th><th class="str"></th></tr></thead><tbody>'
-    + (listeAl('altdept').length ? listeAl('altdept').map((v,ix) =>
-        '<tr><td style="font-weight:600">'+esc(v)+'</td>'
-        + '<td class="hint">'+(altDeptDepti(v)?esc(altDeptDepti(v)):'Tüm departmanlar')+'</td>'
-        + '<td class="num">'+listeKullanim('altdept',v)+'</td>'
-        + '<td style="text-align:right;white-space:nowrap">'
-        + '<button class="btn sm" onclick="listeAdlandirAc(\'altdept\','+ix+')">Düzenle</button> '
-        + '<button class="btn sm no" onclick="listeSil(\'altdept\','+ix+')">Sil</button></td></tr>').join('')
-      : '<tr><td colspan="4" class="hint" style="padding:16px;text-align:center">Liste boş</td></tr>')
-    + '</tbody></table></div></div>'
-    + '<div class="bd" style="border-top:1px solid var(--line2)"><div class="hint">'
-    + 'Alt departman personel kartında, kişinin departmanına göre süzülerek listelenir. '
-    + 'İzin kuralları ileride alt departman bazında tanımlanabilecek.</div></div></div>';
 
   h += '<div class="card"><div class="hd"><h3>Resmî tatiller</h3>'
     + '<div class="sp"><button class="btn sm" onclick="tatilEkle()">+ Tatil ekle</button></div></div>'
@@ -6472,6 +6572,8 @@ function deptUnvanTablo(){
   const depts = listeAl('dept');
   const unvanlar = listeAl('unvan');
   const uIx = u => unvanlar.indexOf(u);
+  const altdeptler = listeAl('altdept');
+  const aIx = a => altdeptler.indexOf(a);
 
   const unvanSatiri = u => '<tr><td style="padding-left:34px">'
     + '<span class="hint" style="margin-right:6px">└</span>'+esc(u)+'</td>'
@@ -6480,6 +6582,14 @@ function deptUnvanTablo(){
     + '<button class="btn sm" onclick="listeAdlandirAc(\'unvan\','+uIx(u)+')">Düzenle</button> '
     + '<button class="btn sm no" onclick="listeSil(\'unvan\','+uIx(u)+')">Sil</button></td></tr>';
 
+  const altSatiri = a => '<tr><td style="padding-left:34px">'
+    + '<span class="hint" style="margin-right:6px">└</span>'
+    + '<span class="pill" style="margin-right:7px">alt dep.</span><b style="font-weight:600">'+esc(a)+'</b></td>'
+    + '<td class="num">'+listeKullanim('altdept',a)+'</td>'
+    + '<td class="str">'
+    + '<button class="btn sm" onclick="listeAdlandirAc(\'altdept\','+aIx(a)+')">Düzenle</button> '
+    + '<button class="btn sm no" onclick="listeSil(\'altdept\','+aIx(a)+')">Sil</button></td></tr>';
+
   const grupSatiri = (anahtar, tikla, sol, orta, sag) =>
     '<tr class="dgrup" onclick="'+tikla+'" title="'+(deptAcikMi(anahtar)?'Kapat':'Aç')+'">'
     + '<td><span class="chev">'+(deptAcikMi(anahtar)?'▾':'▸')+'</span>'+sol+'</td>'
@@ -6487,32 +6597,38 @@ function deptUnvanTablo(){
     + '<td class="str" onclick="event.stopPropagation()">'+sag+'</td></tr>';
 
   let h = '<div class="twpair">' + ustCubuk() + '<div class="tw"><table class="dtbl"><thead><tr>'
-    + '<th>Departman / unvan</th><th class="num">Personel</th><th class="str">İşlem</th>'
+    + '<th>Departman / alt departman / unvan</th><th class="num">Personel</th><th class="str">İşlem</th>'
     + '</tr></thead><tbody>';
 
   for(let i = 0; i < depts.length; i++){
     const d = depts[i];
-    const alt = unvanlar.filter(u => unvanDepti(u) === d);
+    const altD = altdeptler.filter(a => altDeptDepti(a) === d);
+    const unv  = unvanlar.filter(u => unvanDepti(u) === d);
     h += grupSatiri(d, 'deptAc('+i+')',
-      '<b>'+esc(d)+'</b> <span class="hint">· '+alt.length+' unvan</span>',
+      '<b>'+esc(d)+'</b> <span class="hint">· '+altD.length+' alt departman · '+unv.length+' unvan</span>',
       '<b>'+listeKullanim('dept',d)+'</b>',
-        '<button class="btn sm" onclick="unvanEkleAc('+i+')">+ Unvan</button> '
+        '<button class="btn sm" onclick="altDeptEkleAc('+i+')">+ Alt departman</button> '
+      + '<button class="btn sm" onclick="unvanEkleAc('+i+')">+ Unvan</button> '
       + '<button class="btn sm" onclick="listeAdlandirAc(\'dept\','+i+')">Düzenle</button> '
       + '<button class="btn sm no" onclick="listeSil(\'dept\','+i+')">Sil</button>');
-    if(deptAcikMi(d))
-      h += alt.length ? alt.map(unvanSatiri).join('')
-         : '<tr><td colspan="3" class="hint" style="padding-left:34px">Bu departmana bağlı unvan yok</td></tr>';
+    if(deptAcikMi(d)){
+      h += altD.map(altSatiri).join('') + unv.map(unvanSatiri).join('');
+      if(!altD.length && !unv.length)
+        h += '<tr><td colspan="3" class="hint" style="padding-left:34px">Bu departmana bağlı alt departman veya unvan yok</td></tr>';
+    }
   }
 
-  const serbest = unvanlar.filter(u => !unvanDepti(u) || !depts.includes(unvanDepti(u)));
-  if(serbest.length){
+  const serbestU = unvanlar.filter(u => !unvanDepti(u) || !depts.includes(unvanDepti(u)));
+  const serbestA = altdeptler.filter(a => !altDeptDepti(a) || !depts.includes(altDeptDepti(a)));
+  if(serbestU.length || serbestA.length){
     h += grupSatiri(SERBEST, 'deptAc(-1)',
-      '<b>Tüm departmanlarda geçerli</b> <span class="hint">· '+serbest.length+' unvan</span>',
-      serbest.reduce((a,u)=>a+listeKullanim('unvan',u),0),
-      '<button class="btn sm" onclick="unvanEkleAc(-1)">+ Unvan</button>');
-    if(deptAcikMi(SERBEST)) h += serbest.map(unvanSatiri).join('');
+      '<b>Tüm departmanlarda geçerli</b> <span class="hint">· '+serbestA.length+' alt departman · '+serbestU.length+' unvan</span>',
+      serbestU.reduce((a,u)=>a+listeKullanim('unvan',u),0) + serbestA.reduce((a,x)=>a+listeKullanim('altdept',x),0),
+        '<button class="btn sm" onclick="altDeptEkleAc(-1)">+ Alt departman</button> '
+      + '<button class="btn sm" onclick="unvanEkleAc(-1)">+ Unvan</button>');
+    if(deptAcikMi(SERBEST)) h += serbestA.map(altSatiri).join('') + serbestU.map(unvanSatiri).join('');
   }
-  if(!depts.length && !serbest.length)
+  if(!depts.length && !serbestU.length && !serbestA.length)
     h += '<tr><td colspan="3" class="hint" style="padding:18px;text-align:center">Henüz departman tanımlı değil</td></tr>';
 
   return h + '</tbody></table></div></div>';
@@ -6552,6 +6668,35 @@ function unvanEkleUygula(){
   listeEkle('unvan', ad);
   S.ayar.unvanDept = S.ayar.unvanDept || {};
   S.ayar.unvanDept[ad] = dept || '';
+  deptAcikYap(dept || SERBEST);
+  kaydet(); modalKapat();
+  bildir('“'+ad+'” eklendi' + (dept ? ' · '+dept : ' · tüm departmanlar') + '.');
+}
+
+/* ix = departman sırası, -1 ise tüm departmanlarda geçerli alt departman */
+function altDeptEkleAc(ix){
+  const depts = listeAl('dept');
+  const secili = ix >= 0 ? depts[ix] : '';
+  modalAc('<div class="mh"><h3>Alt departman ekle</h3><button class="x" onclick="modalKapat()">×</button></div>'
+  + '<div class="mb"><div class="grid g2">'
+  + '<div class="fld"><label class="lb">Alt departman adı</label>'
+  + '<input type="text" id="ae_ad" onkeydown="if(event.key===\'Enter\')altDeptEkleUygula()"></div>'
+  + '<div class="fld"><label class="lb">Bağlı departman</label><select id="ae_dept">'
+  + '<option value="">Tüm departmanlar</option>'
+  + depts.map(x => '<option'+(x===secili?' selected':'')+'>'+esc(x)+'</option>').join('')
+  + '</select></div></div>'
+  + '<div class="hint mt">Departmana bağlı bir alt departman, personel kartında yalnızca o departman seçiliyken listelenir.</div>'
+  + '</div><div class="mf"><button class="btn" onclick="modalKapat()">Vazgeç</button>'
+  + '<button class="btn pri" onclick="altDeptEkleUygula()">Ekle</button></div>');
+}
+function altDeptEkleUygula(){
+  const ad = (document.getElementById('ae_ad').value || '').trim();
+  const dept = document.getElementById('ae_dept').value;
+  if(!ad){ bildir('Alt departman adı yazın.'); return; }
+  if(listeAl('altdept').some(x => x.toLocaleLowerCase('tr') === ad.toLocaleLowerCase('tr'))){ bildir('Bu alt departman zaten listede.'); return; }
+  listeEkle('altdept', ad);
+  S.ayar.altDeptDept = S.ayar.altDeptDept || {};
+  S.ayar.altDeptDept[ad] = dept || '';
   deptAcikYap(dept || SERBEST);
   kaydet(); modalKapat();
   bildir('“'+ad+'” eklendi' + (dept ? ' · '+dept : ' · tüm departmanlar') + '.');
