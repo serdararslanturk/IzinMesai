@@ -1815,7 +1815,7 @@ function onayVazgec(){
   if(geri){ $('#modal').innerHTML = geri; }
   else modalKapat();
 }
-function modalKapat(){ S.kayitKisi = null; S.kayitTip = ''; S.kayitAralik = null; S.onayIslemi = null; S.onayGeri = null; S.dokumGeri = null; $('#ov').classList.remove('on'); const m=$('#modal'); m.className='modal'; m.innerHTML = ''; }
+function modalKapat(){ S.kayitKisi = null; S.kayitTip = ''; S.kayitAralik = null; S.onayIslemi = null; S.onayGeri = null; S.dokumGeri = null; S.seciciRefresh = null; S.acikSecici = ''; $('#ov').classList.remove('on'); const m=$('#modal'); m.className='modal'; m.innerHTML = ''; }
 
 /* ===================== TANIM LİSTELERİ ve AÇILIR ALANLAR ===================== */
 
@@ -2383,10 +2383,10 @@ function izinPayi(i, yil, hangi){
 
 function seciciAc(anahtar){
   S.acikSecici = (S.acikSecici === anahtar) ? '' : anahtar;
-  ciz();
+  (S.seciciRefresh || ciz)();     // modal içindeyken modalı, değilse sayfayı yeniler
 }
 function seciciKapat(){
-  if(S.acikSecici){ S.acikSecici = ''; ciz(); }
+  if(S.acikSecici){ S.acikSecici = ''; (S.seciciRefresh || ciz)(); }
 }
 /* secenekler: dizi, secili: dizi, degisFn: 'fnAdi' — indeksle çağrılır, null = Tümünü seç/kaldır */
 function cokSecici(anahtar, secenekler, secili, degisFn, gridli){
@@ -4330,7 +4330,21 @@ function topluOnay(tip){
 
 /* ===================== 9. İZİN TAKVİMİ ===================== */
 
-let takvimFiltre = {dept:'', lok:'', kuruldu:'', sadeceIzinli:true};
+let takvimFiltre = {dept:[], altdept:[], lok:[], kuruldu:'', sadeceIzinli:true};
+
+/* İzin takvimi filtre seçenekleri (çoklu seçim) — render ile handler aynı sırayı kullanır */
+function takvimDeptOps(){ return [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.dept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function takvimLokOps(){ return [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.lokasyon).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function takvimAltOps(){ return [...new Set(S.personel.filter(p=>p.aktif && (!takvimFiltre.dept.length || takvimFiltre.dept.includes(p.dept))).map(p=>p.altDept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function takvimCokSec(alan, ops, i){
+  if(i === null){ takvimFiltre[alan] = tumunuSecToggle(takvimFiltre[alan], ops.slice()); ciz(); return; }
+  const v = ops[i]; if(v === undefined) return;
+  const j = takvimFiltre[alan].indexOf(v); if(j < 0) takvimFiltre[alan].push(v); else takvimFiltre[alan].splice(j,1);
+  ciz();
+}
+function takvimDeptSec(i){ takvimCokSec('dept', takvimDeptOps(), i); }
+function takvimAltSec(i){ takvimCokSec('altdept', takvimAltOps(), i); }
+function takvimLokSec(i){ takvimCokSec('lok', takvimLokOps(), i); }
 
 function takvimKisiler(){
   const sv = seviye();
@@ -4345,16 +4359,19 @@ function takvimFiltreKur(){
   const p = aktif();
   if(!p) return;
   if(takvimFiltre.kuruldu === p.id) return;
-  takvimFiltre = {dept: p.dept || '', lok: p.lokasyon || '', kuruldu: p.id,
+  takvimFiltre = {dept: p.dept ? [p.dept] : [], altdept: [], lok: p.lokasyon ? [p.lokasyon] : [], kuruldu: p.id,
                   sadeceIzinli: takvimFiltre.sadeceIzinli};
 }
 function takvimKendiBirimi(){
-  const p = aktif();
-  return !!p && takvimFiltre.dept === (p.dept || '') && takvimFiltre.lok === (p.lokasyon || '');
+  const p = aktif(); if(!p) return false;
+  const d = takvimFiltre.dept, l = takvimFiltre.lok;
+  const deptEsit = d.length === 1 && d[0] === (p.dept || '');
+  const lokEsit = (p.lokasyon || '') ? (l.length === 1 && l[0] === p.lokasyon) : l.length === 0;
+  return deptEsit && lokEsit && !takvimFiltre.altdept.length;
 }
 function takvimVarsayilan(){
   const p = aktif();
-  takvimFiltre = {dept: p.dept || '', lok: p.lokasyon || '', kuruldu: p.id,
+  takvimFiltre = {dept: p.dept ? [p.dept] : [], altdept: [], lok: p.lokasyon ? [p.lokasyon] : [], kuruldu: p.id,
                   sadeceIzinli: takvimFiltre.sadeceIzinli};
   ciz();
 }
@@ -4430,7 +4447,7 @@ function takvimTablo(kisiler){
     h += '<tr'+(p.id===S.aktifId?' class="benim"':'')+'>'
       + '<td class="pn"'+(yetkili?' style="cursor:pointer" title="İzin talebi gir" onclick="izinFormu(\''+p.id+'\')"':'')+'>'
       + '<b>'+esc(p.ad+' '+p.soyad)+'</b>'+(p.id===S.aktifId?' <span class="pill">Siz</span>':'')
-      + '<div class="hint" style="font-size:11px">'+esc(p.dept)+'</div></td>';
+      + '<div class="hint" style="font-size:11px">'+esc(p.dept)+(p.altDept?' · '+esc(p.altDept):'')+'</div></td>';
     for(const x of gunler){
       const we = !S.ayar.calismaGunleri.includes(x.dt.getDay()), t = tatilBul(x.s);
       const iz = S.izin.find(i => i.pid===p.id && (GECERLI.includes(i.durum)||BEKLEYEN.includes(i.durum)) && i.bas<=x.s && i.bit>=x.s);
@@ -4487,7 +4504,9 @@ function vTakvim(){
     if(!ilkIzin[i.pid] || i.bas < ilkIzin[i.pid]) ilkIzin[i.pid] = i.bas;
   }
   const kisiler = hepsi
-    .filter(p => (!takvimFiltre.dept || p.dept===takvimFiltre.dept) && (!takvimFiltre.lok || p.lokasyon===takvimFiltre.lok))
+    .filter(p => (!takvimFiltre.dept.length || takvimFiltre.dept.includes(p.dept))
+              && (!takvimFiltre.altdept.length || takvimFiltre.altdept.includes(p.altDept||''))
+              && (!takvimFiltre.lok.length || takvimFiltre.lok.includes(p.lokasyon||'')))
     .filter(p => !takvimFiltre.sadeceIzinli || ilkIzin[p.id])
     .sort((a,b) => {
       if(a.id === S.aktifId) return -1;
@@ -4511,12 +4530,11 @@ function vTakvim(){
     + '<div style="margin-bottom:12px">'+ayStrip('takvim')+'</div>';
 
   h += '<div class="card takvimkart"><div class="hd yapisik">'
-    + '<select style="width:auto" onchange="takvimFiltre.dept=this.value;ciz()"><option value="">Tüm departmanlar</option>'
-    + depts.map(x=>'<option'+(x===takvimFiltre.dept?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
-    + '<select style="width:auto" onchange="takvimFiltre.lok=this.value;ciz()"><option value="">Tüm lokasyonlar</option>'
-    + loks.map(x=>'<option'+(x===takvimFiltre.lok?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
+    + baslikSecici('tkDept','Departman', takvimDeptOps(), takvimFiltre.dept, 'takvimDeptSec')
+    + baslikSecici('tkAlt','Alt departman', takvimAltOps(), takvimFiltre.altdept, 'takvimAltSec')
+    + baslikSecici('tkLok','Lokasyon', takvimLokOps(), takvimFiltre.lok, 'takvimLokSec')
     + (takvimKendiBirimi()
-        ? '<button class="btn sm" onclick="takvimFiltre.dept=\'\';takvimFiltre.lok=\'\';ciz()">Tüm şirketi göster</button>'
+        ? '<button class="btn sm" onclick="takvimFiltre.dept=[];takvimFiltre.altdept=[];takvimFiltre.lok=[];ciz()">Tüm şirketi göster</button>'
         : '<button class="btn sm" onclick="takvimVarsayilan()">Kendi birimim</button>')
     + '<label class="secim'+(takvimFiltre.sadeceIzinli?' secili':'')+'" title="Bu dönemde izni olmayan kişileri gizler">'
     + '<input type="checkbox"'+(takvimFiltre.sadeceIzinli?' checked':'')
@@ -4966,13 +4984,11 @@ function vPersonel(){
     + '<th>'+baslikSecici('pAlt','Alt departman', pAltOps(), pFiltre.altdept, 'pAltSec')+'</th>'
     + '<th>'+baslikSecici('pLok','Lokasyon', pLokOps(), pFiltre.lok, 'pLokSec')+'</th>'
     + '<th>'+baslikSecici('pUnv','Unvan', pUnvanOps(), pFiltre.unvan, 'pUnvanSec', false, true)+'</th>'
-    + '<th>İzin kıdem tarihi</th><th class="num">Kıdem</th><th class="num">Ücret</th>'
+    + '<th>İzin kıdem tarihi</th><th class="num">Kıdem</th>'
     + '<th>'+baslikSecici('pYon','Yönetici', pYonOps(), pFiltre.yon, 'pYonSec', false, true)+'</th>'
-    + '<th class="num">Kalan izin</th><th class="num">Hak ediş sonrası</th><th>Sonraki hak ediş</th>'
     + '<th class="str">Kart</th></tr></thead><tbody>';
 
   for(const p of liste){
-    const b = bakiye(p.id, S.yil);
     h += '<tr onclick="personelForm(\''+p.id+'\')" title="Kartı açmak için tıklayın"'
       +(p.aktif?'':' style="opacity:.5"')+'>'
       + '<td class="stl" style="font-weight:600">'+esc(p.ad+' '+p.soyad)+(p.aktif?'':' <span class="pill">Pasif</span>')+'</td>'
@@ -4991,15 +5007,11 @@ function vPersonel(){
       + '<td onclick="event.stopPropagation()">'+pUnvanSecici(p)+'</td>'
       + '<td class="mono" style="font-size:12.5px" title="İşe giriş: '+trTarih(p.giris)+'">'+trTarih(p.izinKidem||p.kidem||p.giris)+'</td>'
       + '<td class="num">'+kidemYili(p.id,S.yil)+'</td>'
-      + '<td class="num mono" style="white-space:nowrap" title="'+esc((p.ucretTipi==='gunluk'?'Günlük':'Aylık')+' · '+(p.netBrut==='brut'?'Brüt':'Net'))+'">'+(p.ucret?para(p.ucret):'—')+'</td>'
       + '<td onclick="event.stopPropagation()">'
         + '<select onchange="pSatirGuncelle(\''+p.id+'\',\'yonetici\',this.value)" style="width:100%;font-size:12px">'
         + '<option value="">— yok —</option>'
         + herkes.filter(x=>x.id!==p.id).map(x=>'<option value="'+x.id+'"'+(x.id===p.yonetici?' selected':'')+'>'+esc(x.ad+' '+x.soyad)+'</option>').join('')+'</select>'
       + '</td>'
-      + '<td class="num" style="font-weight:700">'+sayi(b.kalan)+'</td>'
-      + '<td class="num">'+sayi(b.yilSonuKalan)+'</td>'
-      + '<td class="hint" style="white-space:nowrap">'+(b.sonraki ? trTarih(b.sonraki.tarih)+' <span class="pill">+'+b.sonraki.gun+'</span>' : '—')+'</td>'
       + '<td class="str">'
       + '<button class="btn sm" onclick="event.stopPropagation();kisiKayitlari(\''+p.id+'\')">Kayıtlar</button></td></tr>';
   }
@@ -7202,11 +7214,19 @@ baslat().catch(e => {
 function grupForm(id){
   const g = id ? grupBul(id) : null;
   S.grupTaslak = g ? JSON.parse(JSON.stringify(g))
-    : {id:'', ad:'', kapsam:'kisiler', kapsamDeger:'', tip:'minCalisan', deger:1, gerekce:true, aciklama:'', uyeler:[]};
-  if(!S.grupTaslak.kapsam) S.grupTaslak.kapsam = 'kisiler';   // eski kayıtlar
+    : {id:'', ad:'', kapsam:'kisiler', tip:'minCalisan', deger:1, gerekce:true, aciklama:'', uyeler:[]};
+  // Kural artık her zaman "belirli kişiler" tabanlı; eski dinamik kapsamlı kuralı düzenlerken üyeleri sabitle
+  if(g && g.kapsam && g.kapsam !== 'kisiler') S.grupTaslak.uyeler = grupUyeleri(g);
+  S.grupTaslak.kapsam = 'kisiler';
   if(!S.grupTaslak.uyeler) S.grupTaslak.uyeler = [];
-  S.grupTaslak.q = ''; S.grupTaslak.fDept = ''; S.grupTaslak.fLok = '';
+  S.grupTaslak.q = ''; S.grupTaslak.fDept = []; S.grupTaslak.fAlt = []; S.grupTaslak.fLok = [];
+  S.acikSecici = '';
+  S.seciciRefresh = grupKapsamTazele;   // modal içindeki başlık seçicileri bu alanı yeniler
   grupFormCiz();
+}
+function grupKapsamTazele(){
+  const el = document.getElementById('g_kapsamAlan'); if(el) el.innerHTML = grupKapsamAlani();
+  const oz = document.getElementById('g_ozet'); if(oz) oz.innerHTML = grupOzetHtml();
 }
 
 function grupFormCiz(){
@@ -7227,15 +7247,7 @@ function grupFormCiz(){
   + '<input type="text" id="g_ack" value="'+esc(t.aciklama||'')+'" oninput="S.grupTaslak.aciklama=this.value" placeholder="Kuralın amacı / kimler birbirinin yerine bakıyor?"></div>'
   + '</div>'
 
-  + bslk(2, 'Kapsam', 'kural kimlere uygulanacak')
-  + '<div class="fld" style="margin-top:8px"><label class="lb">Kapsam türü</label>'
-  + '<select id="g_kapsam" onchange="grupKapsamDegis(this.value)">'
-  + '<option value="kisiler"'+(t.kapsam==='kisiler'?' selected':'')+'>Belirli kişiler</option>'
-  + '<option value="dept"'+(t.kapsam==='dept'?' selected':'')+'>Departman</option>'
-  + '<option value="altdept"'+(t.kapsam==='altdept'?' selected':'')+'>Alt departman</option>'
-  + '<option value="lokasyon"'+(t.kapsam==='lokasyon'?' selected':'')+'>Lokasyon</option>'
-  + '<option value="sirket"'+(t.kapsam==='sirket'?' selected':'')+'>Tüm şirket</option>'
-  + '</select></div>'
+  + bslk(2, 'Kapsam', 'departman / alt departman / lokasyondan süzüp kişileri ekleyin')
   + '<div id="g_kapsamAlan">'+grupKapsamAlani()+'</div>'
 
   + bslk(3, 'Kural', 'kapsamdaki kişiler için geçerli')
@@ -7246,45 +7258,49 @@ function grupFormCiz(){
   + '<button class="btn pri" onclick="grupKaydet()">Kaydet</button></div>');
 }
 
-/* Kapsam alt-alanı: kişiler seçici / departman-altdept-lokasyon seçici / tüm şirket notu */
+/* Kapsam alanı: çoklu filtre (departman/alt departman/lokasyon) + kişi listesi + Tümünü ekle */
+function grupDeptOps(){ return [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.dept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function grupLokOps(){ return [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.lokasyon).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function grupAltOps(){ const t=S.grupTaslak; return [...new Set(S.personel.filter(p=>p.aktif && (!t.fDept.length || t.fDept.includes(p.dept))).map(p=>p.altDept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr')); }
+function grupFCok(alan, ops, i){
+  const t = S.grupTaslak;
+  if(i === null){ t[alan] = tumunuSecToggle(t[alan], ops.slice()); }
+  else { const v = ops[i]; if(v === undefined) return; const j = t[alan].indexOf(v); if(j < 0) t[alan].push(v); else t[alan].splice(j,1); }
+  grupKapsamTazele();
+}
+function grupFDeptSec(i){ grupFCok('fDept', grupDeptOps(), i); }
+function grupFAltSec(i){ grupFCok('fAlt', grupAltOps(), i); }
+function grupFLokSec(i){ grupFCok('fLok', grupLokOps(), i); }
+/* Filtreye uyan, henüz eklenmemiş kişiler */
+function grupFiltreliKisiler(){
+  const t = S.grupTaslak;
+  const q = (t.q||'').toLocaleLowerCase('tr');
+  return S.personel.filter(p => p.aktif
+    && !t.uyeler.includes(p.id)
+    && (!t.fDept.length || t.fDept.includes(p.dept))
+    && (!t.fAlt.length  || t.fAlt.includes(p.altDept||''))
+    && (!t.fLok.length  || t.fLok.includes(p.lokasyon||''))
+    && (!q || (p.ad+' '+p.soyad+' '+p.unvan).toLocaleLowerCase('tr').includes(q)));
+}
+function grupTumunuEkle(){
+  const t = S.grupTaslak;
+  const ekle = grupFiltreliKisiler().map(p=>p.id);
+  if(!ekle.length){ bildir('Filtreye uyan, eklenecek kişi yok.'); return; }
+  t.uyeler = [...new Set([...t.uyeler, ...ekle])];
+  grupKapsamTazele();
+}
 function grupKapsamAlani(){
   const t = S.grupTaslak;
-  if(t.kapsam === 'kisiler'){
-    return '<div id="g_secili" style="margin-top:8px">'+grupSeciliListesi()+'</div>'
-      + '<div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap">'
-      + '<select style="width:auto;min-width:150px" onchange="grupFiltre(\'fDept\',this.value)"><option value="">Tüm departmanlar</option>'
-      + [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.dept))].sort((a,b)=>a.localeCompare(b,'tr'))
-          .map(x=>'<option'+(x===t.fDept?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
-      + '<select style="width:auto;min-width:140px" onchange="grupFiltre(\'fLok\',this.value)"><option value="">Tüm lokasyonlar</option>'
-      + [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.lokasyon||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'))
-          .map(x=>'<option'+(x===t.fLok?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
-      + '<input type="text" style="flex:1;min-width:150px" placeholder="Ad veya unvan ara…" value="'+esc(t.q||'')+'" oninput="grupAra(this.value)"></div>'
-      + '<div id="g_uyeler" style="border:1px solid var(--line);border-radius:8px;margin-top:7px;overflow:hidden">'+grupUyeListesi()+'</div>';
-  }
-  if(t.kapsam === 'sirket'){
-    return '<div class="hint" style="margin-top:8px;padding:11px 13px;background:var(--surface2);border-radius:8px">Kural tüm aktif personeli kapsar · <b>'+grupUyeleri(t).length+' kişi</b>.</div>';
-  }
-  const ham = t.kapsam==='dept' ? S.personel.filter(p=>p.aktif).map(p=>p.dept)
-    : t.kapsam==='altdept' ? S.personel.filter(p=>p.aktif).map(p=>p.altDept)
-    : S.personel.filter(p=>p.aktif).map(p=>p.lokasyon);
-  const secenek = [...new Set(ham.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));
-  const etk = {dept:'Departman', altdept:'Alt departman', lokasyon:'Lokasyon'}[t.kapsam];
-  return '<div class="fld" style="margin-top:8px"><label class="lb">'+etk+' seç</label>'
-    + '<select id="g_kapsamDeger" onchange="grupKapsamDegerDegis(this.value)"><option value="">— seçiniz —</option>'
-    + secenek.map(x=>'<option'+(x===t.kapsamDeger?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
-    + (t.kapsamDeger ? '<div class="hint" style="margin-top:5px">Bu '+etk.toLocaleLowerCase('tr')+'ta <b>'+grupUyeleri(t).length+' aktif kişi</b> var.</div>'
-        : '<div class="hint" style="margin-top:5px">Kuralın uygulanacağı '+etk.toLocaleLowerCase('tr')+'ı seçin.</div>')
-    + '</div>';
-}
-function grupKapsamDegis(v){
-  S.grupTaslak.kapsam = v;
-  const el = document.getElementById('g_kapsamAlan'); if(el) el.innerHTML = grupKapsamAlani();
-  const oz = document.getElementById('g_ozet'); if(oz) oz.innerHTML = grupOzetHtml();
-}
-function grupKapsamDegerDegis(v){
-  S.grupTaslak.kapsamDeger = v;
-  const el = document.getElementById('g_kapsamAlan'); if(el) el.innerHTML = grupKapsamAlani();
-  const oz = document.getElementById('g_ozet'); if(oz) oz.innerHTML = grupOzetHtml();
+  const filtreliSay = grupFiltreliKisiler().length;
+  return '<div id="g_secili" style="margin-top:8px">'+grupSeciliListesi()+'</div>'
+    + '<div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center">'
+    + baslikSecici('gDept','Departman', grupDeptOps(), t.fDept, 'grupFDeptSec')
+    + baslikSecici('gAlt','Alt departman', grupAltOps(), t.fAlt, 'grupFAltSec')
+    + baslikSecici('gLok','Lokasyon', grupLokOps(), t.fLok, 'grupFLokSec')
+    + '<input type="text" style="flex:1;min-width:130px" placeholder="Ad / unvan ara…" value="'+esc(t.q||'')+'" oninput="grupAra(this.value)">'
+    + '<button class="btn sm pri" onclick="grupTumunuEkle()">Tümünü ekle'+(filtreliSay?' ('+filtreliSay+')':'')+'</button>'
+    + '</div>'
+    + '<div id="g_uyeler" style="border:1px solid var(--line);border-radius:8px;margin-top:7px;max-height:280px;overflow:auto">'+grupUyeListesi()+'</div>';
 }
 /* Kural alt-alanı: kural tipi + değer (kişi sayısı / %) */
 function grupKuralAlani(){
@@ -7350,14 +7366,10 @@ function grupUyeListesi(){
     for(const u of (g.uyeler || [])) (baskaKural[u] = baskaKural[u] || []).push(g.ad);
   }
 
-  const liste = S.personel.filter(p => p.aktif
-    && !t.uyeler.includes(p.id)
-    && (!t.fDept || p.dept === t.fDept)
-    && (!t.fLok || p.lokasyon === t.fLok)
-    && (!q || (p.ad+' '+p.soyad+' '+p.unvan).toLocaleLowerCase('tr').includes(q)));
+  const liste = grupFiltreliKisiler();
 
   if(!liste.length)
-    return '<div class="hint" style="padding:16px;text-align:center">Aramaya uyan kişi bulunamadı.</div>';
+    return '<div class="hint" style="padding:16px;text-align:center">Filtreye uyan, eklenmemiş kişi yok.</div>';
 
   liste.sort((a,b)=>a.dept.localeCompare(b.dept,'tr')||a.ad.localeCompare(b.ad,'tr'));
   let h = '', sonDept = '';
@@ -7376,24 +7388,10 @@ function grupUyeListesi(){
   return h;
 }
 
-function grupListeTazele(){
-  const oz = document.getElementById('g_ozet');
-  if(oz) oz.innerHTML = grupOzetHtml();
-  const sec = document.getElementById('g_secili');
-  if(sec) sec.innerHTML = grupSeciliListesi();
-  const el = document.getElementById('g_uyeler');
-  if(el) el.innerHTML = grupUyeListesi();
-}
-function grupFiltre(alan, deger){
-  S.grupTaslak[alan] = deger;
-  const el = document.getElementById('g_uyeler');
-  if(el) el.innerHTML = grupUyeListesi();
-}
-
 function grupUye(pid, ac){
   const t = S.grupTaslak;
   t.uyeler = ac ? [...new Set([...t.uyeler, pid])] : t.uyeler.filter(x => x !== pid);
-  grupListeTazele();
+  grupKapsamTazele();
 }
 function grupAra(v){
   S.grupTaslak.q = v;
@@ -7414,18 +7412,14 @@ function grupKaydet(){
   t.aciklama = (document.getElementById('g_ack').value || '').trim();
   grupTaslakGuncelle();
   if(!t.ad){ bildir('Kural adı zorunlu.'); return; }
-  if(t.kapsam === 'kisiler' && t.uyeler.length < 2){ bildir('“Belirli kişiler” kapsamında en az iki kişi seçin.'); return; }
-  if((t.kapsam === 'dept' || t.kapsam === 'altdept' || t.kapsam === 'lokasyon') && !t.kapsamDeger){ bildir('Kapsam için bir değer seçin.'); return; }
-  const kapsamli = grupUyeleri(t).length;
-  if(t.kapsam !== 'kisiler' && !kapsamli){ bildir('Bu kapsamda aktif personel yok.'); return; }
-  const kayit = {id:t.id || yeniId('g'), ad:t.ad, kapsam:t.kapsam, kapsamDeger:t.kapsam==='kisiler'||t.kapsam==='sirket'?'':t.kapsamDeger,
-                 tip:t.tip, deger:t.deger, gerekce:t.gerekce, aciklama:t.aciklama,
-                 uyeler:t.kapsam==='kisiler'?t.uyeler:[]};
+  if(t.uyeler.length < 2){ bildir('Kurala en az iki kişi ekleyin.'); return; }
+  const kayit = {id:t.id || yeniId('g'), ad:t.ad, kapsam:'kisiler', kapsamDeger:'',
+                 tip:t.tip, deger:t.deger, gerekce:t.gerekce, aciklama:t.aciklama, uyeler:t.uyeler};
   const mevcut = grupBul(t.id);
   if(mevcut) Object.assign(mevcut, kayit); else gruplar().push(kayit);
   S.grupTaslak = null;
   kaydet(); modalKapat();
-  bildir('“'+kayit.ad+'” kaydedildi · '+kapsamli+' kişi.');
+  bildir('“'+kayit.ad+'” kaydedildi · '+kayit.uyeler.length+' kişi.');
 }
 function grupSil(id){
   const g = grupBul(id); if(!g) return;
