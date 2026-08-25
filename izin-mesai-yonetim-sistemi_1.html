@@ -146,6 +146,8 @@ select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml
 .fg.fizin:hover{background:var(--red-soft); border-color:var(--red-line)}
 .fg.fpas{opacity:.35; cursor:not-allowed}
 .fg.fpas:hover{border-color:var(--line2); background:var(--surface)}
+.fg.fkural{background:#FFF3D4; color:#8A6A16; border-color:#E7CE86}
+.fg.fkural:hover{background:#FDECBE; border-color:#8A6A16}
 .fg.fara{background:var(--brand-soft); border-color:var(--brand-soft); color:var(--brand-deep)}
 .fg.fuc{background:var(--brand); border-color:var(--brand); color:#fff; font-weight:700}
 .fg.fbugun{box-shadow:inset 0 0 0 2px var(--bekle)}
@@ -153,6 +155,7 @@ select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml
 .fleg span{display:flex; align-items:center; gap:4px}
 .fs{width:10px; height:10px; border-radius:3px; display:inline-block; border:1px solid var(--line)}
 .fs.fizin{background:var(--red-soft); border-color:var(--red-line)}
+.fs.fkural{background:#FFF3D4; border-color:#E7CE86}
 .fs.fw{background:#EDF0ED}
 .fs.ft{background:#F6EADF}
 
@@ -2024,25 +2027,48 @@ function bagDepti(k, v){ return bagMap(k)[v] || ''; }
 
 function gruplar(){ return S.ayar.gruplar || (S.ayar.gruplar = []); }
 function grupBul(id){ return gruplar().find(g => g.id === id) || null; }
-function kisiGruplari(pid){ return gruplar().filter(g => (g.uyeler || []).includes(pid)); }
 
-/* Kuralın izin verdiği eşzamanlı izinli sayısı */
+/* Kuralın kapsadığı kişiler — kapsam türüne göre dinamik.
+   kisiler: elle seçilen üyeler · dept/altdept/lokasyon: o gruptaki aktif personel · sirket: tüm aktif personel */
+function grupUyeleri(g){
+  if(g.kapsam === 'dept')     return S.personel.filter(p => p.aktif && p.dept === g.kapsamDeger).map(p => p.id);
+  if(g.kapsam === 'altdept')  return S.personel.filter(p => p.aktif && (p.altDept||'') === g.kapsamDeger).map(p => p.id);
+  if(g.kapsam === 'lokasyon') return S.personel.filter(p => p.aktif && (p.lokasyon||'') === g.kapsamDeger).map(p => p.id);
+  if(g.kapsam === 'sirket')   return S.personel.filter(p => p.aktif).map(p => p.id);
+  return (g.uyeler || []);    // 'kisiler' (varsayılan)
+}
+function kisiGruplari(pid){ return gruplar().filter(g => grupUyeleri(g).includes(pid)); }
+
+/* Kuralın izin verdiği eşzamanlı izinli sayısı (üst sınır) */
 function grupSiniri(g){
-  const n = (g.uyeler || []).length;
-  return g.tip === 'maxIzinli'
-    ? Math.max(0, Number(g.deger) || 0)
-    : Math.max(0, n - (Number(g.deger) || 0));
+  const n = grupUyeleri(g).length;
+  if(g.tip === 'maxIzinli') return Math.max(0, Number(g.deger) || 0);
+  if(g.tip === 'yuzdeCalisan'){                              // en az %deger işbaşında
+    const minCalisan = Math.ceil(n * (Number(g.deger) || 0) / 100);
+    return Math.max(0, n - minCalisan);
+  }
+  return Math.max(0, n - (Number(g.deger) || 0));            // minCalisan
 }
 function grupKuralMetni(g){
-  const n = (g.uyeler || []).length, s = grupSiniri(g);
-  return g.tip === 'maxIzinli'
-    ? 'Aynı anda en çok ' + g.deger + ' kişi izinli' + (n ? ' · en az ' + (n - s) + ' kişi işbaşında' : '')
-    : 'En az ' + g.deger + ' kişi işbaşında' + (n ? ' · aynı anda en çok ' + s + ' kişi izinli' : '');
+  const n = grupUyeleri(g).length, s = grupSiniri(g);
+  if(g.tip === 'maxIzinli')
+    return 'Aynı anda en çok ' + g.deger + ' kişi izinli' + (n ? ' · en az ' + (n - s) + ' kişi işbaşında' : '');
+  if(g.tip === 'yuzdeCalisan')
+    return 'En az %' + g.deger + ' işbaşında' + (n ? ' · en az ' + (n - s) + '/' + n + ' kişi · en çok ' + s + ' izinli' : '');
+  return 'En az ' + g.deger + ' kişi işbaşında' + (n ? ' · aynı anda en çok ' + s + ' kişi izinli' : '');
+}
+
+function grupKapsamMetni(g){
+  if(g.kapsam === 'dept')     return 'Departman: ' + g.kapsamDeger;
+  if(g.kapsam === 'altdept')  return 'Alt departman: ' + g.kapsamDeger;
+  if(g.kapsam === 'lokasyon') return 'Lokasyon: ' + g.kapsamDeger;
+  if(g.kapsam === 'sirket')   return 'Tüm şirket';
+  return 'Belirli kişiler';
 }
 
 /* Belirli bir günde gruptan izinli olanlar */
 function grupIzinliler(g, tarih, haricIzinId, haricPid){
-  return (g.uyeler || []).filter(u => u !== haricPid && S.izin.some(i =>
+  return grupUyeleri(g).filter(u => u !== haricPid && S.izin.some(i =>
     i.id !== haricIzinId && i.pid === u &&
     (GECERLI.includes(i.durum) || BEKLEYEN.includes(i.durum)) &&
     i.bas <= tarih && i.bit >= tarih));
@@ -2083,6 +2109,20 @@ function grupIhlalMetni(ihlaller){
 }
 function grupNotMetni(ihlaller){
   return ihlaller.map(x => x.grup.ad + ' · ' + grupKuralMetni(x.grup) + ' · ' + x.gunSayisi + ' iş gününde aşılıyor').join(' | ');
+}
+
+/* Belirli bir günde bu kişi izin alırsa özel kural ihlal olur mu — takvimde renklendirme için.
+   Döner: null (ihlal yok) ya da {grup, izinli} (en yoğun kuralın bilgisi) */
+function gunKuralIhlali(pid, t){
+  if(!calismaGunuMu(t)) return null;
+  let enKotu = null;
+  for(const g of kisiGruplari(pid)){
+    const sinir = grupSiniri(g);
+    const izinli = grupIzinliler(g, t, null, pid);
+    if(izinli.length + 1 > sinir && (!enKotu || izinli.length > enKotu.izinli.length))
+      enKotu = {grup:g, izinli};
+  }
+  return enKotu;
 }
 
 
@@ -2439,7 +2479,10 @@ const SAYFALAR = [
   {k:'mesailiste',ad:'Mesai listesi',    ic:'◴', grup:'Raporlar', yonetici:true},
   {k:'personel',  ad:'Personel kartları',ic:'⛁', grup:'Yönetim', ik:true},
   {k:'kadro',     ad:'Kadro ve ücret',   ic:'▤', grup:'Yönetim', ik:true},
-  {k:'ayar',      ad:'Ayarlar',          ic:'⚙', grup:'Yönetim', ik:true}
+  {k:'ayar_org',   ad:'Organizasyon',    ic:'▦', grup:'Ayarlar', ik:true},
+  {k:'ayar_izin',  ad:'İzin kuralları',  ic:'▤', grup:'Ayarlar', ik:true},
+  {k:'ayar_mesai', ad:'Mesai',           ic:'◷', grup:'Ayarlar', ik:true},
+  {k:'ayar_genel', ad:'Genel & Veri',    ic:'⚙', grup:'Ayarlar', ik:true}
 ];
 
 /* Dar ekranda menü şeridinde yalnız bu ikisi kalır */
@@ -2521,7 +2564,8 @@ function cizGovde(){
   if(kos && !kos()) S.sayfa = 'izinlerim';
   navCiz(); ustCiz();
   const fn = {izinlerim:vIzinlerim, liste:vListe, mesailiste:vMesaiListe, izinde:vIzinde, mesailerim:vMesailerim, onay:vOnay,
-              takvim:vTakvim, personel:vPersonel, rapor:vRapor, kadro:vKadro, ayar:vAyar}[S.sayfa];
+              takvim:vTakvim, personel:vPersonel, rapor:vRapor, kadro:vKadro,
+              ayar_org:vAyar, ayar_izin:vAyar, ayar_mesai:vAyar, ayar_genel:vAyar}[S.sayfa];
   $('#page').innerHTML = fn ? fn() : '';
   if(S.sayfa === 'takvim') takvimBoya();
   guvenli(ustKaydirmaBagla);
@@ -3113,17 +3157,24 @@ function formTakvimCiz(){
     const gecmis = gecmisTarihMi(t);
     const secilemez = !!iz || gecmis;
 
+    const kuralIhlal = (!secilemez && !we && !tat) ? gunKuralIhlali(pid, t) : null;
+
     let c = 'fg';
     if(tat) c += ' ft'; else if(we) c += ' fw';
     if(iz) c += ' fizin';
     if(gecmis) c += ' fpas';
+    if(kuralIhlal) c += ' fkural';
     if(bas && bit && t >= bas && t <= bit) c += ' fara';
     if(t === bas || (t === bit && bit)) c += ' fuc';
     if(t === bugunS) c += ' fbugun';
 
     const ip = iz ? trTarih(t)+' · zaten izinlisiniz: '+turBul(iz.tur).ad+' ('+DURUM_AD[iz.durum]+')'
       : gecmis ? trTarih(t)+' · sistem başlangıcından önce'
-      : trTarih(t)+(tat ? ' · '+tat.ad+', izinden düşmez' : we ? ' · hafta tatili, izinden düşmez' : '');
+      : trTarih(t)+(tat ? ' · '+tat.ad+', izinden düşmez'
+          : we ? ' · hafta tatili, izinden düşmez'
+          : kuralIhlal ? ' · ⚠ '+kuralIhlal.grup.ad+' kuralı aşılıyor'
+              + (kuralIhlal.izinli.length ? ' · izinli: '+kuralIhlal.izinli.map(u=>adSoyad(u)).join(', ') : '')
+          : '');
 
     hucre += '<div class="'+c+'" title="'+esc(ip)+'"'
       + (secilemez ? '' : ' onclick="formGunSec(\''+t+'\')"')+'>'+g+'</div>';
@@ -3140,6 +3191,7 @@ function formTakvimCiz(){
     + '<div class="fgun">'+['Pt','Sa','Ça','Pe','Cu','Ct','Pa'].map(x=>'<div class="fgb">'+x+'</div>').join('')+'</div>'
     + '<div class="fgun">'+hucre+'</div>'
     + '<div class="fleg"><span><i class="fs fizin"></i>İzinli olduğunuz gün</span>'
+    + '<span><i class="fs fkural"></i>Kural ihlali</span>'
     + '<span><i class="fs fw"></i>Hafta tatili</span><span><i class="fs ft"></i>Resmî tatil</span></div>'
     + '</div>';
 }
@@ -6348,9 +6400,15 @@ function kadroListe(){
 
 function vAyar(){
   const a = S.ayar;
-  let h = '<h1 style="font-size:20px">Ayarlar</h1><div class="hint" style="margin-bottom:16px">Hesaplama kuralları burada tanımlanır; tüm bakiyeler anında yeniden hesaplanır.</div>';
+  const bolum = {ayar_org:'organizasyon', ayar_izin:'izinkural', ayar_mesai:'mesai', ayar_genel:'genel'}[S.sayfa] || 'organizasyon';
+  const baslik = {organizasyon:'Organizasyon', izinkural:'İzin kuralları', mesai:'Mesai', genel:'Genel & Veri'}[bolum];
+  const aciklama = {organizasyon:'Departman, alt departman, unvan ve lokasyon yapısı.',
+    izinkural:'Kıdem hak edişi, izin türleri, özel kurallar ve resmî tatiller.',
+    mesai:'Fazla mesai çarpanları ve kişi bazında mesai girişi izinleri.',
+    genel:'Genel ayarlar, yetki düzeyleri ve veri işlemleri.'}[bolum];
+  let h = '<h1 style="font-size:20px">'+baslik+'</h1><div class="hint" style="margin-bottom:16px">'+aciklama+'</div>';
 
-  h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Genel</h3></div><div class="bd">'
+  if(bolum==='genel') h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Genel</h3></div><div class="bd">'
     + '<div class="grid g3">'
     + '<div class="fld"><label class="lb">Şirket adı</label><input type="text" value="'+esc(a.sirket)+'" onchange="S.ayar.sirket=this.value;kaydet()"></div>'
     + '<div class="fld"><label class="lb">Haftalık çalışma süresi (saat)</label><input type="number" value="'+a.haftalikSaat+'" onchange="S.ayar.haftalikSaat=Number(this.value);kaydet()"></div>'
@@ -6383,6 +6441,7 @@ function vAyar(){
     + ' onchange="S.ayar.arifeYarim=this.checked;kaydet()"> Arife günleri yarım gün olarak izinden düşsün</label>'
     + '</div></div>';
 
+  if(bolum==='izinkural'){
   h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Kıdeme göre yıllık izin hak edişi</h3>'
     + '<div class="sp hint">Kıdem yıldönümünde bakiyeye eklenir · 4857 sayılı İş Kanunu md. 53</div></div><div class="bd flush"><div class="tw"><table><thead><tr>'
     + '<th>Kıdem</th><th class="num">İzin günü</th><th></th></tr></thead><tbody>';
@@ -6406,7 +6465,9 @@ function vAyar(){
       + 'onchange="S.ayar.izinTurleri['+ix+'].hakGun=Number(this.value)||null;kaydet()"></td></tr>';
   });
   h += '</tbody></table></div></div></div>';
+  }
 
+  if(bolum==='mesai'){
   h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Fazla mesai çarpanları</h3></div><div class="bd flush"><div class="tw"><table><thead><tr>'
     + '<th>Mesai türü</th><th class="num">Çarpan</th></tr></thead><tbody>';
   a.mesaiTurleri.forEach((t,ix)=>{
@@ -6414,10 +6475,11 @@ function vAyar(){
       + '<td class="num"><input type="number" step="0.05" value="'+t.carpan+'" style="width:90px;text-align:right" onchange="S.ayar.mesaiTurleri['+ix+'].carpan=Number(this.value);kaydet()"></td></tr>';
   });
   h += '</tbody></table></div></div></div>';
+  }
 
   const satir = (yetki, kim, gorur, gormez) => '<tr><td style="font-weight:600">'+yetki+'</td>'
     + '<td class="hint">'+kim+'</td><td>'+gorur+'</td><td class="hint">'+gormez+'</td></tr>';
-  h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Yetki düzeyleri</h3>'
+  if(bolum==='genel') h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Yetki düzeyleri</h3>'
     + '<div class="sp hint">Kimin neyi göreceği personel kartındaki “Sistem yetkisi” ve yönetici bağından belirlenir</div></div>'
     + '<div class="bd flush"><div class="tw"><table><thead><tr>'
     + '<th>Yetki</th><th>Kimde</th><th>Görebildiği</th><th>Göremediği</th></tr></thead><tbody>'
@@ -6430,7 +6492,7 @@ function vAyar(){
     + 'Yönetici alt kadronun tamamını görür: bir bölge yöneticisinin altındaki sorumlunun ekibi de listeye dahildir. '
     + 'Bekleyen onaylar listesine ise yalnızca doğrudan bağlı kişilerin talepleri düşer.</div></div></div>';
 
-  h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Departman, alt departman ve unvanlar</h3>'
+  if(bolum==='organizasyon') h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Departman, alt departman ve unvanlar</h3>'
     + '<div class="sp"><span class="hint">Departmana tıklayınca alt departman ve unvanları açılır</span>'
     + '<button class="btn sm" onclick="deptHepsi('+(deptAcikSayisi()?'false':'true')+')">'
     + (deptAcikSayisi() ? 'Tümünü kapat' : 'Tümünü aç')+'</button></div></div>'
@@ -6443,16 +6505,17 @@ function vAyar(){
     + 'Silinen bir değer kullanımdaysa ilgili kayıtların nereye taşınacağı sorulur; bir departmanı silerseniz '
     + 'ona bağlı alt departman ve unvanlar da hedef departmana geçer.</div></div></div>';
 
-  h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Özel kurallar</h3>'
+  if(bolum==='izinkural') h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Özel kurallar</h3>'
     + '<div class="sp"><span class="hint">Birbirinin yerine bakan kişiler ve yedeklilik kuralı</span>'
     + '<button class="btn sm pri" onclick="grupForm()">+ Kural ekle</button></div></div>'
     + '<div class="bd flush"><div class="tw"><table><thead><tr>'
-    + '<th>Grup</th><th class="num">Kişi</th><th>Kural</th><th>Aşılırsa</th><th class="str"></th>'
+    + '<th>Kural</th><th class="num">Kişi</th><th>Koşul</th><th>Aşılırsa</th><th class="str"></th>'
     + '</tr></thead><tbody>'
     + (gruplar().length ? gruplar().map(g =>
         '<tr><td><div style="font-weight:600">'+esc(g.ad)+'</div>'
+        + '<div class="hint" style="font-size:11px">'+esc(grupKapsamMetni(g))+'</div>'
         + (g.aciklama?'<div class="hint">'+esc(g.aciklama)+'</div>':'')+'</td>'
-        + '<td class="num">'+(g.uyeler||[]).length+'</td>'
+        + '<td class="num">'+grupUyeleri(g).length+'</td>'
         + '<td class="hint">'+esc(grupKuralMetni(g))+'</td>'
         + '<td>'+(g.gerekce?'<span class="tag b"><i class="dot"></i>Gerekçe ister</span>':'<span class="tag n"><i class="dot"></i>Yalnızca uyarır</span>')+'</td>'
         + '<td style="text-align:right;white-space:nowrap">'
@@ -6465,7 +6528,7 @@ function vAyar(){
     + 'personel gerekçesini yazar, talep kural aşımı notuyla birlikte yöneticiye gider, kararı yönetici verir.'
     + '</div></div></div>';
 
-  h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Lokasyonlar</h3>'
+  if(bolum==='organizasyon') h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Lokasyonlar</h3>'
     + '<div class="sp"><button class="btn sm" onclick="listeYonetAc(\'lokasyon\')">Ekle / sil</button></div></div>'
     + '<div class="bd flush"><div class="tw"><table><thead><tr><th>Lokasyon</th><th class="num">Personel</th><th class="str"></th></tr></thead><tbody>'
     + (listeAl('lokasyon').length ? listeAl('lokasyon').map((v,ix) =>
@@ -6476,6 +6539,7 @@ function vAyar(){
       : '<tr><td colspan="3" class="hint" style="padding:16px;text-align:center">Liste boş</td></tr>')
     + '</tbody></table></div></div></div>';
 
+  if(bolum==='izinkural'){
   h += '<div class="card"><div class="hd"><h3>Resmî tatiller</h3>'
     + '<div class="sp"><button class="btn sm" onclick="tatilEkle()">+ Tatil ekle</button></div></div>'
     + '<div class="bd flush"><div class="tw"><table><thead><tr>'
@@ -6493,7 +6557,9 @@ function vAyar(){
     + '<div class="bd" style="border-top:1px solid var(--line2)"><div class="hint">'
     + 'Sabit tarihli resmî tatiller her yıl otomatik eklenir. <b>Dinî bayramlar otomatik eklenmez</b> — '
     + 'her yıl Diyanet takvimine göre elle girilmelidir.</div></div></div>';
+  }
 
+  if(bolum==='mesai'){
   h += '<div class="card"><div class="hd"><h3>Mesai girişi</h3>'
     + '<div class="sp hint">Kapatılan kişiler için fazla mesai kaydı girilemez</div></div>'
     + '<div class="bd flush">'
@@ -6529,8 +6595,9 @@ function vAyar(){
     + msListe.length+' kişi listeleniyor · '
     + (kapaliSayi ? '<b>'+kapaliSayi+' kişide mesai girişi kapalı</b>' : 'Herkeste mesai girişi açık')+'</div></div>'
     + '</div></div>';
+  }
 
-  h += '<div class="card"><div class="hd"><h3>Veri</h3>'
+  if(bolum==='genel') h += '<div class="card"><div class="hd"><h3>Veri</h3>'
     + '<div class="sp hint">'+S.izin.length+' izin · '+S.mesai.length+' mesai kaydı</div></div>'
     + '<div class="bd row" style="flex-wrap:wrap;gap:9px">'
     + '<button class="btn" onclick="listeyiTazele()">Eksik alanları listeden tamamla</button>'
@@ -7048,6 +7115,7 @@ async function baslat(){
   for(const i of S.izin) if(i.durum === 'ik_bekliyor') i.durum = 'onaylandi';
   for(const m of S.mesai) if(m.durum === 'ik_bekliyor') m.durum = 'onaylandi';
   if(!Array.isArray(S.ayar.gruplar)) S.ayar.gruplar = JSON.parse(JSON.stringify(AYAR_VAR.gruplar || []));
+  for(const g of S.ayar.gruplar){ if(!g.kapsam) g.kapsam = 'kisiler'; if(g.kapsamDeger === undefined) g.kapsamDeger = ''; }
 
   // izin türü listesi sürüm 2: kaldırılan türler yıllık izne, dogum -> babalik olarak eşlenir
   if((S.ayar.turSurum || 0) < 2){
@@ -7134,7 +7202,9 @@ baslat().catch(e => {
 function grupForm(id){
   const g = id ? grupBul(id) : null;
   S.grupTaslak = g ? JSON.parse(JSON.stringify(g))
-    : {id:'', ad:'', tip:'minCalisan', deger:1, gerekce:true, aciklama:'', uyeler:[]};
+    : {id:'', ad:'', kapsam:'kisiler', kapsamDeger:'', tip:'minCalisan', deger:1, gerekce:true, aciklama:'', uyeler:[]};
+  if(!S.grupTaslak.kapsam) S.grupTaslak.kapsam = 'kisiler';   // eski kayıtlar
+  if(!S.grupTaslak.uyeler) S.grupTaslak.uyeler = [];
   S.grupTaslak.q = ''; S.grupTaslak.fDept = ''; S.grupTaslak.fLok = '';
   grupFormCiz();
 }
@@ -7149,52 +7219,102 @@ function grupFormCiz(){
   + '<button class="x" onclick="modalKapat()">×</button></div>'
   + '<div class="mb">'
 
-  + '<div class="bslk" style="margin-top:0">1 &middot; Grup</div>'
+  + '<div class="bslk" style="margin-top:0">1 &middot; Kural</div>'
   + '<div class="grid g2" style="margin-top:8px">'
-  + '<div class="fld"><label class="lb">Grup adı</label>'
-  + '<input type="text" id="g_ad" value="'+esc(t.ad)+'" oninput="S.grupTaslak.ad=this.value" placeholder="Örn. Muhasebe"></div>'
-  + '<div class="fld"><label class="lb">Açıklama</label>'
-  + '<input type="text" id="g_ack" value="'+esc(t.aciklama||'')+'" oninput="S.grupTaslak.aciklama=this.value" placeholder="Kimler birbirinin yerine bakıyor?"></div>'
+  + '<div class="fld"><label class="lb">Kural adı</label>'
+  + '<input type="text" id="g_ad" value="'+esc(t.ad)+'" oninput="S.grupTaslak.ad=this.value" placeholder="Örn. Muhasebe yedekliliği"></div>'
+  + '<div class="fld"><label class="lb">Kural açıklaması</label>'
+  + '<input type="text" id="g_ack" value="'+esc(t.aciklama||'')+'" oninput="S.grupTaslak.aciklama=this.value" placeholder="Kuralın amacı / kimler birbirinin yerine bakıyor?"></div>'
   + '</div>'
 
-  + bslk(2, 'Kişiler', 'kural bu kişilere uygulanacak')
-  + '<div id="g_secili" style="margin-top:8px">'+grupSeciliListesi()+'</div>'
-  + '<div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap">'
-  + '<select style="width:auto;min-width:150px" onchange="grupFiltre(\'fDept\',this.value)"><option value="">Tüm departmanlar</option>'
-  + [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.dept))].sort((a,b)=>a.localeCompare(b,'tr'))
-      .map(x=>'<option'+(x===t.fDept?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
-  + '<select style="width:auto;min-width:140px" onchange="grupFiltre(\'fLok\',this.value)"><option value="">Tüm lokasyonlar</option>'
-  + [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.lokasyon||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'))
-      .map(x=>'<option'+(x===t.fLok?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
-  + '<input type="text" style="flex:1;min-width:150px" placeholder="Ad veya unvan ara…" value="'+esc(t.q||'')+'" oninput="grupAra(this.value)"></div>'
-  + '<div id="g_uyeler" style="border:1px solid var(--line);border-radius:8px;margin-top:7px;overflow:hidden">'
-  + grupUyeListesi()+'</div>'
-
-  + bslk(3, 'Kural', 'seçilen kişiler için geçerli')
-  + '<div class="grid g2" style="margin-top:8px">'
-  + '<div class="fld"><label class="lb">Kural</label><select id="g_tip" onchange="grupTaslakGuncelle()">'
-  + '<option value="minCalisan"'+(t.tip==='minCalisan'?' selected':'')+'>En az … kişi işbaşında kalmalı</option>'
-  + '<option value="maxIzinli"'+(t.tip==='maxIzinli'?' selected':'')+'>Aynı anda en çok … kişi izinli olabilir</option>'
+  + bslk(2, 'Kapsam', 'kural kimlere uygulanacak')
+  + '<div class="fld" style="margin-top:8px"><label class="lb">Kapsam türü</label>'
+  + '<select id="g_kapsam" onchange="grupKapsamDegis(this.value)">'
+  + '<option value="kisiler"'+(t.kapsam==='kisiler'?' selected':'')+'>Belirli kişiler</option>'
+  + '<option value="dept"'+(t.kapsam==='dept'?' selected':'')+'>Departman</option>'
+  + '<option value="altdept"'+(t.kapsam==='altdept'?' selected':'')+'>Alt departman</option>'
+  + '<option value="lokasyon"'+(t.kapsam==='lokasyon'?' selected':'')+'>Lokasyon</option>'
+  + '<option value="sirket"'+(t.kapsam==='sirket'?' selected':'')+'>Tüm şirket</option>'
   + '</select></div>'
-  + '<div class="fld"><label class="lb">Kişi sayısı</label>'
-  + '<input type="number" min="0" id="g_deger" value="'+(t.deger)+'" oninput="grupTaslakGuncelle()"></div>'
-  + '<div class="fld full"><label class="lb">Kural aşılırsa</label><select id="g_gerekce" onchange="grupTaslakGuncelle()">'
-  + '<option value="1"'+(t.gerekce?' selected':'')+'>Gerekçe iste, talebi yöneticiye gönder</option>'
-  + '<option value="0"'+(!t.gerekce?' selected':'')+'>Yalnızca uyar</option></select></div>'
-  + '</div>'
+  + '<div id="g_kapsamAlan">'+grupKapsamAlani()+'</div>'
+
+  + bslk(3, 'Kural', 'kapsamdaki kişiler için geçerli')
+  + '<div id="g_kuralAlan">'+grupKuralAlani()+'</div>'
   + '<div id="g_ozet" class="mt">'+grupOzetHtml()+'</div>'
 
   + '</div><div class="mf"><button class="btn" onclick="modalKapat()">Vazgeç</button>'
   + '<button class="btn pri" onclick="grupKaydet()">Kaydet</button></div>');
 }
 
+/* Kapsam alt-alanı: kişiler seçici / departman-altdept-lokasyon seçici / tüm şirket notu */
+function grupKapsamAlani(){
+  const t = S.grupTaslak;
+  if(t.kapsam === 'kisiler'){
+    return '<div id="g_secili" style="margin-top:8px">'+grupSeciliListesi()+'</div>'
+      + '<div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap">'
+      + '<select style="width:auto;min-width:150px" onchange="grupFiltre(\'fDept\',this.value)"><option value="">Tüm departmanlar</option>'
+      + [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.dept))].sort((a,b)=>a.localeCompare(b,'tr'))
+          .map(x=>'<option'+(x===t.fDept?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
+      + '<select style="width:auto;min-width:140px" onchange="grupFiltre(\'fLok\',this.value)"><option value="">Tüm lokasyonlar</option>'
+      + [...new Set(S.personel.filter(p=>p.aktif).map(p=>p.lokasyon||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'))
+          .map(x=>'<option'+(x===t.fLok?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
+      + '<input type="text" style="flex:1;min-width:150px" placeholder="Ad veya unvan ara…" value="'+esc(t.q||'')+'" oninput="grupAra(this.value)"></div>'
+      + '<div id="g_uyeler" style="border:1px solid var(--line);border-radius:8px;margin-top:7px;overflow:hidden">'+grupUyeListesi()+'</div>';
+  }
+  if(t.kapsam === 'sirket'){
+    return '<div class="hint" style="margin-top:8px;padding:11px 13px;background:var(--surface2);border-radius:8px">Kural tüm aktif personeli kapsar · <b>'+grupUyeleri(t).length+' kişi</b>.</div>';
+  }
+  const ham = t.kapsam==='dept' ? S.personel.filter(p=>p.aktif).map(p=>p.dept)
+    : t.kapsam==='altdept' ? S.personel.filter(p=>p.aktif).map(p=>p.altDept)
+    : S.personel.filter(p=>p.aktif).map(p=>p.lokasyon);
+  const secenek = [...new Set(ham.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));
+  const etk = {dept:'Departman', altdept:'Alt departman', lokasyon:'Lokasyon'}[t.kapsam];
+  return '<div class="fld" style="margin-top:8px"><label class="lb">'+etk+' seç</label>'
+    + '<select id="g_kapsamDeger" onchange="grupKapsamDegerDegis(this.value)"><option value="">— seçiniz —</option>'
+    + secenek.map(x=>'<option'+(x===t.kapsamDeger?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
+    + (t.kapsamDeger ? '<div class="hint" style="margin-top:5px">Bu '+etk.toLocaleLowerCase('tr')+'ta <b>'+grupUyeleri(t).length+' aktif kişi</b> var.</div>'
+        : '<div class="hint" style="margin-top:5px">Kuralın uygulanacağı '+etk.toLocaleLowerCase('tr')+'ı seçin.</div>')
+    + '</div>';
+}
+function grupKapsamDegis(v){
+  S.grupTaslak.kapsam = v;
+  const el = document.getElementById('g_kapsamAlan'); if(el) el.innerHTML = grupKapsamAlani();
+  const oz = document.getElementById('g_ozet'); if(oz) oz.innerHTML = grupOzetHtml();
+}
+function grupKapsamDegerDegis(v){
+  S.grupTaslak.kapsamDeger = v;
+  const el = document.getElementById('g_kapsamAlan'); if(el) el.innerHTML = grupKapsamAlani();
+  const oz = document.getElementById('g_ozet'); if(oz) oz.innerHTML = grupOzetHtml();
+}
+/* Kural alt-alanı: kural tipi + değer (kişi sayısı / %) */
+function grupKuralAlani(){
+  const t = S.grupTaslak, yuzde = t.tip === 'yuzdeCalisan';
+  return '<div class="grid g2" style="margin-top:8px">'
+    + '<div class="fld"><label class="lb">Kural</label><select id="g_tip" onchange="grupTipDegis(this.value)">'
+    + '<option value="minCalisan"'+(t.tip==='minCalisan'?' selected':'')+'>En az … kişi işbaşında kalmalı</option>'
+    + '<option value="maxIzinli"'+(t.tip==='maxIzinli'?' selected':'')+'>Aynı anda en çok … kişi izinli olabilir</option>'
+    + '<option value="yuzdeCalisan"'+(yuzde?' selected':'')+'>En az %… işbaşında kalmalı</option>'
+    + '</select></div>'
+    + '<div class="fld"><label class="lb">'+(yuzde?'Yüzde (%)':'Kişi sayısı')+'</label>'
+    + '<input type="number" min="0"'+(yuzde?' max="100"':'')+' id="g_deger" value="'+(t.deger)+'" oninput="grupTaslakGuncelle()"></div>'
+    + '<div class="fld full"><label class="lb">Kural aşılırsa</label><select id="g_gerekce" onchange="grupTaslakGuncelle()">'
+    + '<option value="1"'+(t.gerekce?' selected':'')+'>Gerekçe iste, talebi yöneticiye gönder</option>'
+    + '<option value="0"'+(!t.gerekce?' selected':'')+'>Yalnızca uyar</option></select></div>'
+    + '</div>';
+}
+function grupTipDegis(v){
+  S.grupTaslak.tip = v;
+  const el = document.getElementById('g_kuralAlan'); if(el) el.innerHTML = grupKuralAlani();
+  const oz = document.getElementById('g_ozet'); if(oz) oz.innerHTML = grupOzetHtml();
+}
+
 function grupOzetHtml(){
-  const t = S.grupTaslak, n = t.uyeler.length, s = grupSiniri(t);
-  if(!n) return '<div class="hint">Kural, kişiler seçildikten sonra anlam kazanır. Yukarıdaki listeden kişi ekleyin.</div>';
-  const sorun = s >= n ? 'Kural etkisiz: bu ayarla gruptaki herkes aynı anda izne çıkabilir.'
-              : (s <= 0 ? 'Bu ayarla gruptan hiç kimse izne çıkamaz.' : '');
-  return '<div class="card" style="box-shadow:none;background:var(--surface2)"><div class="bd row" style="gap:22px;padding:12px 14px">'
-    + '<div><div class="lb" style="font-size:10px">Grup</div><div style="font-weight:600;margin-top:4px" class="mono">'+n+' kişi</div></div>'
+  const t = S.grupTaslak, n = grupUyeleri(t).length, s = grupSiniri(t);
+  if(!n) return '<div class="hint">'+(t.kapsam==='kisiler' ? 'Kural, kişiler seçildikten sonra anlam kazanır. Aşağıdaki listeden ekleyin.' : 'Kapsam seçilince özet görünür.')+'</div>';
+  const sorun = s >= n ? 'Kural etkisiz: bu ayarla kapsamdaki herkes aynı anda izne çıkabilir.'
+              : (s <= 0 ? 'Bu ayarla kapsamdan hiç kimse izne çıkamaz.' : '');
+  return '<div class="card" style="box-shadow:none;background:var(--surface2)"><div class="bd row" style="gap:22px;padding:12px 14px;flex-wrap:wrap">'
+    + '<div><div class="lb" style="font-size:10px">Kapsam</div><div style="font-weight:600;margin-top:4px" class="mono">'+n+' kişi</div></div>'
     + '<div><div class="lb" style="font-size:10px">Aynı anda izinli</div><div style="font-weight:600;margin-top:4px" class="mono">en çok '+s+'</div></div>'
     + '<div><div class="lb" style="font-size:10px">İşbaşında kalan</div><div style="font-weight:600;margin-top:4px" class="mono">en az '+(n-s)+'</div></div>'
     + (sorun?'<div style="margin-left:auto;color:var(--bekle);font-size:12px;max-width:230px">'+sorun+'</div>':'')
@@ -7220,31 +7340,24 @@ function grupSeciliListesi(){
     + '</div>';
 }
 
-/* Eklenebilecek kişiler: gruptakiler ve başka kurallara girmiş olanlar listelenmez */
+/* Eklenebilecek kişiler — aynı kişi birden fazla kurala girebilir; başka kurallar bilgi olarak gösterilir */
 function grupUyeListesi(){
   const t = S.grupTaslak;
   const q = (t.q||'').toLocaleLowerCase('tr');
-  const baskaGrup = {};
+  const baskaKural = {};                         // kişi başka hangi "belirli kişiler" kurallarında (bilgi)
   for(const g of gruplar()){
-    if(g.id === t.id) continue;
-    for(const u of (g.uyeler || [])) baskaGrup[u] = g.ad;
+    if(g.id === t.id || g.kapsam !== 'kisiler') continue;
+    for(const u of (g.uyeler || [])) (baskaKural[u] = baskaKural[u] || []).push(g.ad);
   }
-  const gizli = S.personel.filter(p => p.aktif && baskaGrup[p.id]).length;
 
   const liste = S.personel.filter(p => p.aktif
     && !t.uyeler.includes(p.id)
-    && !baskaGrup[p.id]
     && (!t.fDept || p.dept === t.fDept)
     && (!t.fLok || p.lokasyon === t.fLok)
     && (!q || (p.ad+' '+p.soyad+' '+p.unvan).toLocaleLowerCase('tr').includes(q)));
 
-  const dipnot = gizli
-    ? '<div class="hint" style="padding:8px 10px;background:var(--surface2);border-top:1px solid var(--line2)">'
-      + gizli+' kişi başka bir kuralda tanımlı olduğu için listelenmiyor.</div>'
-    : '';
-
   if(!liste.length)
-    return '<div class="hint" style="padding:16px;text-align:center">Eklenebilecek kişi bulunamadı.</div>' + dipnot;
+    return '<div class="hint" style="padding:16px;text-align:center">Aramaya uyan kişi bulunamadı.</div>';
 
   liste.sort((a,b)=>a.dept.localeCompare(b.dept,'tr')||a.ad.localeCompare(b.ad,'tr'));
   let h = '', sonDept = '';
@@ -7255,11 +7368,12 @@ function grupUyeListesi(){
     }
     h += '<div class="row" style="gap:9px;padding:6px 10px;border-bottom:1px solid var(--line2)">'
       + '<span style="font-size:12.5px">'+esc(p.ad+' '+p.soyad)+'</span>'
-      + '<span class="hint" style="font-size:11px">'+esc(p.unvan)+(p.lokasyon?' · '+esc(p.lokasyon):'')+'</span>'
+      + '<span class="hint" style="font-size:11px">'+esc(p.unvan)+(p.lokasyon?' · '+esc(p.lokasyon):'')
+        + (baskaKural[p.id]?' · <span style="color:var(--bekle)">'+esc(baskaKural[p.id].join(', '))+' kuralında</span>':'')+'</span>'
       + '<button class="btn sm" style="margin-left:auto;padding:2px 9px" onclick="grupUye(\''+p.id+'\',true)">Ekle</button>'
       + '</div>';
   }
-  return h + dipnot;
+  return h;
 }
 
 function grupListeTazele(){
@@ -7288,9 +7402,9 @@ function grupAra(v){
 }
 function grupTaslakGuncelle(){
   const t = S.grupTaslak;
-  t.tip = document.getElementById('g_tip').value;
-  t.deger = Number(document.getElementById('g_deger').value) || 0;
-  t.gerekce = document.getElementById('g_gerekce').value === '1';
+  const tipEl = document.getElementById('g_tip');   if(tipEl) t.tip = tipEl.value;
+  const degEl = document.getElementById('g_deger'); if(degEl) t.deger = Number(degEl.value) || 0;
+  const gEl   = document.getElementById('g_gerekce'); if(gEl) t.gerekce = gEl.value === '1';
   const oz = document.getElementById('g_ozet');
   if(oz) oz.innerHTML = grupOzetHtml();
 }
@@ -7299,15 +7413,19 @@ function grupKaydet(){
   t.ad = (document.getElementById('g_ad').value || '').trim();
   t.aciklama = (document.getElementById('g_ack').value || '').trim();
   grupTaslakGuncelle();
-  if(!t.ad){ bildir('Grup adı zorunlu.'); return; }
-  if(t.uyeler.length < 2){ bildir('Grupta en az iki kişi olmalı.'); return; }
-  const kayit = {id:t.id || yeniId('g'), ad:t.ad, tip:t.tip, deger:t.deger, gerekce:t.gerekce,
-                 aciklama:t.aciklama, uyeler:t.uyeler};
+  if(!t.ad){ bildir('Kural adı zorunlu.'); return; }
+  if(t.kapsam === 'kisiler' && t.uyeler.length < 2){ bildir('“Belirli kişiler” kapsamında en az iki kişi seçin.'); return; }
+  if((t.kapsam === 'dept' || t.kapsam === 'altdept' || t.kapsam === 'lokasyon') && !t.kapsamDeger){ bildir('Kapsam için bir değer seçin.'); return; }
+  const kapsamli = grupUyeleri(t).length;
+  if(t.kapsam !== 'kisiler' && !kapsamli){ bildir('Bu kapsamda aktif personel yok.'); return; }
+  const kayit = {id:t.id || yeniId('g'), ad:t.ad, kapsam:t.kapsam, kapsamDeger:t.kapsam==='kisiler'||t.kapsam==='sirket'?'':t.kapsamDeger,
+                 tip:t.tip, deger:t.deger, gerekce:t.gerekce, aciklama:t.aciklama,
+                 uyeler:t.kapsam==='kisiler'?t.uyeler:[]};
   const mevcut = grupBul(t.id);
   if(mevcut) Object.assign(mevcut, kayit); else gruplar().push(kayit);
   S.grupTaslak = null;
   kaydet(); modalKapat();
-  bildir('“'+kayit.ad+'” kaydedildi · '+kayit.uyeler.length+' kişi.');
+  bildir('“'+kayit.ad+'” kaydedildi · '+kapsamli+' kişi.');
 }
 function grupSil(id){
   const g = grupBul(id); if(!g) return;
