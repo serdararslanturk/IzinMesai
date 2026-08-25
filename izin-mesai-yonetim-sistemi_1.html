@@ -1215,6 +1215,8 @@ function bugun(){ return iso(new Date()); }
 function ilkYil(){ return Number(S.ayar && S.ayar.ilkYil) || 2026; }
 function sistemBaslangic(){ return (S.ayar && S.ayar.sistemBaslangic) || (ilkYil()+'-01-01'); }
 function gecmisTarihMi(t){ return !!t && t < sistemBaslangic(); }
+/* Kişinin işten çıkış tarihi doluysa, o tarihten sonrasına izin girilemez */
+function cikisSonrasiMi(pid, t){ const p = per(pid); return !!(p && p.cikis && t && t > p.cikis); }
 function yilSinirla(y){ return Math.max(ilkYil(), Number(y) || ilkYil()); }
 function sayi(n){ return (Math.round(n*100)/100).toLocaleString('tr-TR'); }
 
@@ -2474,7 +2476,7 @@ const SAYFALAR = [
   {k:'mesailerim',ad:'Mesailerim',       ic:'◷', grup:'Kendim', kosul: () => mesaiAcik(S.aktifId)},
   {k:'onay',      ad:'Bekleyen onaylar', ic:'✓', grup:'Kendim', yonetici:true},
   {k:'takvim',    ad:'İzin takvimi',     ic:'▦', grup:'Raporlar'},
-  {k:'izinde',    ad:'İzin raporu',      ic:'☷', grup:'Raporlar'},
+  {k:'izinde',    ad:'İzin raporu',      ic:'☷', grup:'Raporlar', yonetici:true},
   {k:'rapor',     ad:'İzin hakları',     ic:'▥', grup:'Raporlar', yonetici:true},
   {k:'mesailiste',ad:'Mesai listesi',    ic:'◴', grup:'Raporlar', yonetici:true},
   {k:'personel',  ad:'Personel kartları',ic:'⛁', grup:'Yönetim', ik:true},
@@ -3109,6 +3111,7 @@ function formAyDegis(n){
 function formGunSec(t){
   const pid = $('#f_pid').value;
   if(gecmisTarihMi(t)){ bildir(trTarih(sistemBaslangic())+' tarihinden önceye izin girilemez.'); return; }
+  if(cikisSonrasiMi(pid, t)){ bildir('İşten çıkış tarihinden ('+trTarih(per(pid).cikis)+') sonrasına izin girilemez.'); return; }
   if(kendiCakismasi(pid, t, t, null).length){ bildir(trTarih(t)+' tarihinde zaten izin kaydınız var.'); return; }
 
   /* saatlik izin tek gün: bir tık yeter, takvim kapanır */
@@ -3155,14 +3158,15 @@ function formTakvimCiz(){
     const we = !S.ayar.calismaGunleri.includes(dt.getDay());
     const iz = kendiCakismasi(pid, t, t, null)[0];
     const gecmis = gecmisTarihMi(t);
-    const secilemez = !!iz || gecmis;
+    const cikisSonra = cikisSonrasiMi(pid, t);
+    const secilemez = !!iz || gecmis || cikisSonra;
 
     const kuralIhlal = (!secilemez && !we && !tat) ? gunKuralIhlali(pid, t) : null;
 
     let c = 'fg';
     if(tat) c += ' ft'; else if(we) c += ' fw';
     if(iz) c += ' fizin';
-    if(gecmis) c += ' fpas';
+    if(gecmis || cikisSonra) c += ' fpas';
     if(kuralIhlal) c += ' fkural';
     if(bas && bit && t >= bas && t <= bit) c += ' fara';
     if(t === bas || (t === bit && bit)) c += ' fuc';
@@ -3170,6 +3174,7 @@ function formTakvimCiz(){
 
     const ip = iz ? trTarih(t)+' · zaten izinlisiniz: '+turBul(iz.tur).ad+' ('+DURUM_AD[iz.durum]+')'
       : gecmis ? trTarih(t)+' · sistem başlangıcından önce'
+      : cikisSonra ? trTarih(t)+' · işten çıkış tarihinden sonra'
       : trTarih(t)+(tat ? ' · '+tat.ad+', izinden düşmez'
           : we ? ' · hafta tatili, izinden düşmez'
           : kuralIhlal ? ' · ⚠ '+kuralIhlal.grup.ad+' kuralı aşılıyor'
@@ -3447,6 +3452,10 @@ function izinKaydet(){
   if(!saatli && gun === 0){ bildir('Seçilen aralıkta iş günü yok.'); return; }
   if(gecmisTarihMi(bas)){
     bildir(trTarih(sistemBaslangic())+' tarihinden önceye izin girilemez.');
+    return;
+  }
+  if(cikisSonrasiMi(pid, bit)){
+    bildir(adSoyad(pid)+' işten çıkış tarihinden ('+trTarih(per(pid).cikis)+') sonrasına izin girilemez.');
     return;
   }
   if(tur === 'dogumgunu'){
@@ -4061,6 +4070,7 @@ function izinRevizeKaydet(id){
   const notu = (document.getElementById('rv_not').value || '').trim();
   if(!bas || !bit){ bildir('Tarihleri GG.AA.YYYY biçiminde girin.'); return; }
   if(gecmisTarihMi(bas)){ bildir(trTarih(sistemBaslangic())+' tarihinden önceye izin girilemez.'); return; }
+  if(cikisSonrasiMi(i.pid, bit)){ bildir('İşten çıkış tarihinden ('+trTarih(per(i.pid).cikis)+') sonrasına izin girilemez.'); return; }
   const gun = isGunu(bas, bit);
   if(gun === 0){ bildir('Seçilen aralıkta iş günü yok.'); return; }
   if(bas === i.bas && bit === i.bit && tur === i.tur){ bildir('Değişiklik yapılmadı.'); return; }
@@ -4467,7 +4477,7 @@ function takvimTablo(kisiler){
       if(iz && gorebilir(p.id)){
         tik = ' onclick="kayitDetay(\'izin\',\''+iz.id+'\')"';
         hucreCls += ' tik';
-      } else if(!iz && yetkili && !gecmisTarihMi(x.s)){
+      } else if(!iz && yetkili && !gecmisTarihMi(x.s) && !cikisSonrasiMi(p.id, x.s)){
         tik = ' onclick="takvimGun(\''+p.id+'\',\''+x.s+'\')"';
         hucreCls += ' tik';
         const dusmez = gunDegeri(x.s) === 0 ? ' · '+(t ? t.ad : 'hafta tatili')+', izinden düşmez' : '';
@@ -4751,6 +4761,10 @@ function takvimGun(pid, tarih){
     bildir(trTarih(sistemBaslangic())+' tarihinden önceye izin girilemez.');
     return;
   }
+  if(cikisSonrasiMi(pid, tarih)){
+    bildir(adSoyad(pid)+' işten çıkış tarihinden ('+trTarih(per(pid).cikis)+') sonrasına izin girilemez.');
+    return;
+  }
   const mevcut = S.izin.find(i => i.pid === pid && (GECERLI.includes(i.durum) || BEKLEYEN.includes(i.durum))
                                 && i.bas <= tarih && i.bit >= tarih);
   if(mevcut){
@@ -4956,7 +4970,11 @@ function pAra(v){
 function vPersonel(){
   const deptListe = listeAl('dept'), lokListe = listeAl('lokasyon');
   const herkes = S.personel.slice().sort((a,b)=>(a.ad+' '+a.soyad).localeCompare(b.ad+' '+b.soyad,'tr'));
+  const ayrilan = !!S.pAyrilan;                                        // işten ayrılanları göster
+  const aktifSay = S.personel.filter(p=>p.aktif).length;
+  const ayrilanSay = S.personel.filter(p=>!p.aktif).length;
   let liste = S.personel.filter(p =>
+    (ayrilan ? !p.aktif : p.aktif) &&
     (!pFiltre.dept.length || pFiltre.dept.includes(p.dept)) &&
     (!pFiltre.altdept.length || pFiltre.altdept.includes(p.altDept||'')) &&
     (!pFiltre.unvan.length || pFiltre.unvan.includes(p.unvan||'')) &&
@@ -4967,8 +4985,12 @@ function vPersonel(){
   liste.sort((a,b)=>a.dept.localeCompare(b.dept,'tr')||a.ad.localeCompare(b.ad,'tr'));
 
   let h = '<div class="row" style="justify-content:space-between;margin-bottom:16px">'
-    + '<div><h1 style="font-size:20px">Personel kartları</h1><div class="hint">'+S.personel.filter(p=>p.aktif).length+' aktif kayıt</div></div>'
-    + '<div class="row"><button class="btn" onclick="iceAktar()">Liste içe aktar</button>'
+    + '<div><h1 style="font-size:20px">Personel kartları</h1><div class="hint">'
+      + (ayrilan ? ayrilanSay+' işten ayrılan kayıt (arşiv)' : aktifSay+' aktif kayıt')+'</div></div>'
+    + '<div class="row">'
+    + '<button class="btn'+(ayrilan?' pri':'')+'" onclick="S.pAyrilan='+(!ayrilan)+';ciz()">'
+      + (ayrilan ? 'Aktif personel ('+aktifSay+')' : 'İşten ayrılanlar ('+ayrilanSay+')')+'</button>'
+    + '<button class="btn" onclick="iceAktar()">Liste içe aktar</button>'
     + '<button class="btn" onclick="disaAktar()">CSV dışa aktar</button>'
     + '<button class="btn pri" onclick="personelForm()">+ Personel ekle</button></div></div>';
 
@@ -4989,9 +5011,9 @@ function vPersonel(){
     + '<th class="str">Kart</th></tr></thead><tbody>';
 
   for(const p of liste){
-    h += '<tr onclick="personelForm(\''+p.id+'\')" title="Kartı açmak için tıklayın"'
-      +(p.aktif?'':' style="opacity:.5"')+'>'
-      + '<td class="stl" style="font-weight:600">'+esc(p.ad+' '+p.soyad)+(p.aktif?'':' <span class="pill">Pasif</span>')+'</td>'
+    h += '<tr onclick="personelForm(\''+p.id+'\')" title="Kartı açmak için tıklayın">'
+      + '<td class="stl" style="font-weight:600">'+esc(p.ad+' '+p.soyad)
+        + (p.aktif?'':' <span class="pill" title="'+(p.cikis?'Çıkış: '+trTarih(p.cikis):'Pasif')+'">İşten ayrıldı</span>')+'</td>'
       + '<td onclick="event.stopPropagation()">'
         + '<select onchange="pSatirGuncelle(\''+p.id+'\',\'dept\',this.value)" style="width:100%;font-size:12.5px">'
         + deptListe.map(x=>'<option'+(x===p.dept?' selected':'')+'>'+esc(x)+'</option>').join('')
@@ -5990,7 +6012,7 @@ function izindeKisiSayisi(){
 }
 
 function vIzinde(){
-  const kapsam = S.personel.filter(p => p.aktif);
+  const kapsam = takvimKisiler();        // yetki kapsamı: personel yalnız kendisi, yönetici kendi+altı, üst yönetim/İK tümü
   const depts = [...new Set(kapsam.map(p => p.dept))].sort((a,b) => a.localeCompare(b,'tr'));
   const loks  = [...new Set(kapsam.map(p => p.lokasyon || '').filter(Boolean))].sort((a,b) => a.localeCompare(b,'tr'));
   const seciliAy    = S.raporAy    || (S.raporAy = []);
@@ -7255,7 +7277,7 @@ function grupFormCiz(){
   + '<div id="g_ozet" class="mt">'+grupOzetHtml()+'</div>'
 
   + '</div><div class="mf"><button class="btn" onclick="modalKapat()">Vazgeç</button>'
-  + '<button class="btn pri" onclick="grupKaydet()">Kaydet</button></div>');
+  + '<button class="btn pri" onclick="grupKaydet()">Kaydet</button></div>', true);
 }
 
 /* Kapsam alanı: çoklu filtre (departman/alt departman/lokasyon) + kişi listesi + Tümünü ekle */
