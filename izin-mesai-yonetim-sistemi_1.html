@@ -154,6 +154,12 @@ select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml
 .fleg{display:flex; gap:11px; flex-wrap:wrap; margin-top:7px; font-size:10.5px; color:var(--ink3)}
 .fleg span{display:flex; align-items:center; gap:4px}
 .fs{width:10px; height:10px; border-radius:3px; display:inline-block; border:1px solid var(--line)}
+.saatserit{display:flex; flex-wrap:wrap; gap:5px; margin-top:7px}
+.saatcip{font-family:'IBM Plex Mono'; font-size:12px; padding:5px 9px; border:1px solid var(--line2);
+  border-radius:7px; background:var(--surface); color:var(--ink2); cursor:pointer}
+.saatcip:hover{border-color:var(--brand); background:var(--brand-soft)}
+.saatcip.ara{background:var(--brand-soft); border-color:var(--brand-soft); color:var(--brand-deep)}
+.saatcip.uc{background:var(--brand); border-color:var(--brand); color:#fff; font-weight:700}
 .fs.fizin{background:var(--red-soft); border-color:var(--red-line)}
 .fs.fkural{background:#FFF3D4; border-color:#E7CE86}
 .fs.fw{background:#EDF0ED}
@@ -464,6 +470,15 @@ tbody tr:last-child td{border-bottom:0}
 .g4{grid-template-columns:repeat(4,1fr)}
 .g3{grid-template-columns:repeat(3,1fr)}
 .g2{grid-template-columns:repeat(2,1fr)}
+
+/* iki değeri tek karede yan yana gösteren bölünmüş stat kartı */
+.stat.bolku{display:flex; flex-direction:column}
+.stat.bolku .yarilar{display:flex; align-items:stretch}
+.stat.bolku .yari{flex:1 1 0; min-width:0}
+.stat.bolku .yari + .yari{padding-left:15px; border-left:1px solid var(--line)}
+.stat.bolku .yari:first-child{padding-right:15px}
+.stat.bolku .yari .v{font-size:23px}
+@media(max-width:520px){ .stat.bolku .yari .v{font-size:20px} }
 
 /* ---------- imza: izin şeridi ---------- */
 .balance{background:var(--surface); border:1px solid var(--line); border-radius:var(--r2); padding:18px; box-shadow:var(--sh)}
@@ -2193,20 +2208,20 @@ function tarihTakvimAc(id){
 }
 
 /* Tarih alanı üretici ve okuyucu */
-function tarihFld(etiket, id, isoDeger, sonra, ekNot, ozelAcici){
+function tarihFld(etiket, id, isoDeger, sonra, ekNot, ozelAcici, salt){
   return '<div class="fld"><label class="lb">'+etiket+'</label>'
-    + tarihInput(id, isoDeger, sonra, ozelAcici) + (ekNot || '') + '</div>';
+    + tarihInput(id, isoDeger, sonra, ozelAcici, salt) + (ekNot || '') + '</div>';
 }
 /* Dar ekran mı? Tarihler telefonda elle yazılmaz, takvimden seçilir. */
 function darEkran(){
   return typeof window !== 'undefined' && window.innerWidth && window.innerWidth <= 900;
 }
 
-function tarihInput(id, isoDeger, sonra, ozelAcici){
+function tarihInput(id, isoDeger, sonra, ozelAcici, salt){
   const cb = sonra ? ', () => { '+sonra+' }' : '';
   const iso = /^\d{4}-\d{2}-\d{2}$/.test(isoDeger || '') ? isoDeger : '';
   const ac = ozelAcici ? ozelAcici+'(\''+id+'\')' : 'tarihTakvimAc(\''+id+'\')';
-  if(darEkran())
+  if(darEkran() || salt)
     return '<div class="tarihkutu">'
       + '<input type="text" class="tarih" id="'+id+'" readonly placeholder="Takvimden seçin"'
       + ' value="'+esc(isoToTr(iso))+'" onclick="'+ac+'">'
@@ -2851,16 +2866,18 @@ function mesaiHesapMetni(m){
     + (m.karsilik === 'ucret' ? '' : ' · serbest zaman')+'</div>';
 }
 
-function mesaiSatiri(m, yonetimGorunumu){
+function mesaiSatiri(m, yonetimGorunumu, dokum){
   const t = mturBul(m.tur);
   let ops = '';
-  if(mesaiKararVerebilir(m))
-    ops += '<button class="btn sm ok" onclick="mesaiKarar(\''+m.id+'\',true)">Onayla</button> '
-         + '<button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Reddet</button> ';
-  if(m.durum === 'yonetici_bekliyor' && m.pid === S.aktifId) ops += '<button class="btn sm" onclick="mesaiIptal(\''+m.id+'\')">Geri çek</button> ';
-  if(mesaiRevizeEdilebilir(m)) ops += '<button class="btn sm" onclick="mesaiRevizeAc(\''+m.id+'\')">Revize</button> ';
-  if(mesaiIptalTalebi(m)) ops += '<button class="btn sm no" onclick="mesaiIptal(\''+m.id+'\')">İptal talebi</button> ';
-  if(mesaiSilinebilir(m)) ops += '<button class="btn sm no" onclick="mesaiSil(\''+m.id+'\')">Sil</button> ';
+  if(!dokum){                                    // döküm görünümünde yalnız Detay; aksiyonlar Detay ekranından
+    if(mesaiKararVerebilir(m))
+      ops += '<button class="btn sm ok" onclick="mesaiKarar(\''+m.id+'\',true)">Onayla</button> '
+           + '<button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Reddet</button> ';
+    if(m.durum === 'yonetici_bekliyor' && m.pid === S.aktifId) ops += '<button class="btn sm" onclick="mesaiIptal(\''+m.id+'\')">Geri çek</button> ';
+    if(mesaiRevizeEdilebilir(m)) ops += '<button class="btn sm" onclick="mesaiRevizeAc(\''+m.id+'\')">Revize</button> ';
+    if(mesaiIptalTalebi(m)) ops += '<button class="btn sm no" onclick="mesaiIptal(\''+m.id+'\')">İptal talebi</button> ';
+    if(mesaiSilinebilir(m)) ops += '<button class="btn sm no" onclick="mesaiSil(\''+m.id+'\')">Sil</button> ';
+  }
   ops += '<button class="btn sm" onclick="mesaiDetay(\''+m.id+'\')">Detay</button>';
   return '<tr class="kart">'
     + (yonetimGorunumu ? '<td data-e="Personel"><div style="font-weight:600">'+esc(adSoyad(m.pid))+'</div><div class="hint">'+esc(per(m.pid)?.dept||'')+'</div></td>' : '')
@@ -2872,6 +2889,60 @@ function mesaiSatiri(m, yonetimGorunumu){
          : '<span class="hint">'+sayi(m.sure*t.carpan)+' sa izin</span>')+'</td>'
     + '<td data-e="Durum">'+durumTag(m.durum)+'</td>'
     + '<td class="str islem">'+ops+'</td></tr>';
+}
+
+/* Tüm fazla mesai kayıtları — "Toplam mesai / Mesai ücreti" kartından açılır (detay Detay'dan) */
+function mesaiDokum(pid, yil){
+  if(!gorebilir(pid)){ bildir('Bu kişinin kayıtlarını görme yetkiniz yok.'); return; }
+  S.mesaiDokumKisi = pid;
+  if(yil !== undefined) S.mesaiDokumYil = Number(yil);
+  if(S.mesaiDokumYil === undefined) S.mesaiDokumYil = S.yil;
+  S.mesaiDokumAylar = []; S.mesaiDokumAyAcik = false;
+  mesaiDokumCiz();
+}
+function mesaiDokumYilSec(y){ S.mesaiDokumYil = Number(y); mesaiDokumCiz(); }
+function mesaiDokumAyToggle(){ S.mesaiDokumAyAcik = !S.mesaiDokumAyAcik; mesaiDokumCiz(); }
+function mesaiDokumAyKapat(){ S.mesaiDokumAyAcik = false; mesaiDokumCiz(); }
+function mesaiDokumAySec(ix){
+  S.mesaiDokumAylar = S.mesaiDokumAylar || [];
+  if(ix===null){ S.mesaiDokumAylar = tumunuSecToggle(S.mesaiDokumAylar, [...Array(12).keys()]); }
+  else { const j = S.mesaiDokumAylar.indexOf(ix); if(j<0) S.mesaiDokumAylar.push(ix); else S.mesaiDokumAylar.splice(j,1); }
+  mesaiDokumCiz();
+}
+function mesaiDokumCiz(){
+  const pid = S.mesaiDokumKisi, yil = S.mesaiDokumYil;
+  const p = per(pid); if(!p) return;
+  const aylar = (S.mesaiDokumAylar && S.mesaiDokumAylar.length) ? S.mesaiDokumAylar : null;
+  const liste = S.mesai.filter(x => x.pid === pid && x.tarih.slice(0,4) === String(yil)
+                       && (!aylar || aylar.includes(Number(x.tarih.slice(5,7)) - 1)))
+                       .sort((a,c) => c.tarih.localeCompare(a.tarih));
+  const yillar = [];
+  for(let y = ilkYil(); y <= Math.max(S.yil, new Date().getFullYear()) + 1; y++) yillar.push(y);
+  const donemAd = aylar ? aylar.slice().sort((a,b)=>a-b).map(ix=>AY[ix]).join(', ')+' '+yil : 'tüm fazla mesai kayıtları';
+  modalAc('<div class="mh"><h3 class="mbaslik">MESAİ DÖKÜMÜ</h3>'
+  + '<button class="x" onclick="modalKapat()">×</button></div><div class="mb">'
+  + '<div class="row" style="margin-bottom:10px;gap:8px;align-items:center;flex-wrap:wrap">'
+    + '<span class="hint"><b style="color:var(--ink)">'+esc(adSoyad(pid))+'</b> · '+esc(donemAd)+'</span>'
+    + '<span class="lb" style="margin-left:auto">Yıl</span>'
+    + '<select style="width:auto" onchange="mesaiDokumYilSec(this.value)">'
+    + yillar.map(y => '<option value="'+y+'"'+(y===yil?' selected':'')+'>'+y+'</option>').join('')+'</select>'
+    + '<span class="lb">Ay</span>'
+    + '<div class="coksec dokumay">'
+      + '<button type="button" class="cokbtn'+(aylar?' dolu':'')+'" style="min-width:104px;padding:5px 10px" onclick="event.stopPropagation();mesaiDokumAyToggle()"><span>'
+        + (aylar ? (aylar.length===1?esc(AY[aylar[0]]):aylar.length+' ay') : 'Tüm yıl')+'</span><i>▾</i></button>'
+      + (S.mesaiDokumAyAcik ? '<div class="cokpan" onclick="event.stopPropagation()"><div class="cokust"><b>Ay</b>'
+          + '<button type="button" onclick="mesaiDokumAySec(null)">'+((S.mesaiDokumAylar&&S.mesaiDokumAylar.length>=12) ? 'Temizle' : 'Tümünü seç')+'</button></div>'
+          + '<div class="coklist aygrid">'+AY.map((a,ix)=>'<label><input type="checkbox" '+((S.mesaiDokumAylar||[]).includes(ix)?'checked':'')+' onchange="mesaiDokumAySec('+ix+')"><span>'+esc(a)+'</span></label>').join('')+'</div></div>' : '')
+    + '</div>'
+  + '</div>'
+  + '<div class="bd flush"><table class="ptbl" style="width:100%"><thead><tr>'
+    + '<th>Tarih</th><th>Saat</th><th>Hesaplama</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
+  + (liste.length
+      ? liste.map(x => mesaiSatiri(x, false, true)).join('') + mesaiDipToplam(liste)
+      : '<tr><td colspan="6"><div class="hint" style="padding:16px 0;text-align:center">'+(aylar?'Seçili ay(lar)da':'Bu yıl')+' mesai kaydı yok.</div></td></tr>')
+  + '</tbody></table></div>'
+  + (S.mesaiDokumAyAcik ? '<div style="height:210px"></div>' : '')
+  + '</div><div class="mf"><button class="btn" onclick="modalKapat()">Kapat</button></div>', true);
 }
 
 function vMesailerim(){
@@ -2886,31 +2957,42 @@ function vMesailerim(){
         ? '<button class="btn pri anabtn mesaibtn" onclick="mesaiFormu()">+ Mesai kaydı</button>'
         : '<span class="pill" title="Mesai girişiniz kapalı, İK ile görüşün">Mesai girişi kapalı</span>')+'</div>';
 
-  h += '<div class="grid g4" style="margin-bottom:14px">'
-    + stat('Toplam mesai', sayi(m.toplamSaat), 'saat',
-        m.bekleyen ? sayi(m.bekleyen)+' saat onay bekliyor' : 'Fiili çalışma')
-    + stat('Ücrete esas', sayi(m.toplamUcret), 'saat', 'Zam çarpanı uygulanmış')
+  const mesaiIkili = '<div class="stat raporlu bolku tiklanir" onclick="mesaiDokum(\''+p.id+'\')">'
+    + '<div class="yarilar">'
+      + '<div class="yari"><div class="k">Toplam mesai</div>'
+        + '<div class="v">'+sayi(m.toplamSaat)+'<small>saat</small></div>'
+        + '<div class="s">'+(m.bekleyen ? sayi(m.bekleyen)+' saat onay bekliyor' : 'Fiili çalışma')+'</div></div>'
+      + '<div class="yari"><div class="k">Ücrete esas</div>'
+        + '<div class="v">'+sayi(m.toplamUcret)+'<small>saat</small></div>'
+        + '<div class="s">Zam çarpanı uygulanmış</div></div>'
+    + '</div>'
+    + '<div class="statok"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
+      + '<rect x="1.6" y="2.4" width="12.8" height="11.2" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/>'
+      + '<path d="M4.4 6.2h7.2M4.4 9h7.2M4.4 11.6h4.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>'
+      + '</svg><span>Raporu aç</span><i>›</i></div></div>';
+
+  h += '<div class="grid g3" style="margin-bottom:14px">'
+    + mesaiIkili
     + stat('Mesai ücreti', sayi(m.toplamTutar), '₺',
-        m.bekleyenTutar ? sayi(m.bekleyenTutar)+' ₺ onay bekliyor' : 'Ücret karşılığı seçilenler')
+        m.bekleyenTutar ? sayi(m.bekleyenTutar)+' ₺ onay bekliyor' : 'Ücret karşılığı seçilenler',
+        '', "mesaiDokum('"+p.id+"')", 'raporlu')
     + stat('Kalan kota', sayi(Math.max(0,m.kalanKota)), 'saat', 'Yıllık '+S.ayar.yillikMesaiSiniri+' saat sınırı')
     + '</div>';
 
   if(m.kalanKota < 0) h += '<div class="card" style="margin-bottom:14px;border-color:var(--red-line);background:var(--red-soft)"><div class="bd"><b>Yıllık fazla çalışma sınırı aşıldı.</b> <span class="hint">'+sayi(-m.kalanKota)+' saat sınır üstünde. İK ile görüşün.</span></div></div>';
 
-  const msBekleyen = liste.filter(x => BEKLEYEN.includes(x.durum));
-  h += '<div class="card"><div class="hd"><h3>Mesai kayıtlarım</h3>'
-    + (msBekleyen.length
-        ? '<span class="bekrozet">'+msBekleyen.length+' kayıt onay bekliyor · '+sayi(msBekleyen.reduce((a,x)=>a+x.sure,0))+' saat</span>'
+  const bekleyenler = S.mesai.filter(x => x.pid === p.id && x.tarih.slice(0,4) === String(S.yil) && BEKLEYEN.includes(x.durum))
+                             .sort((a,c) => c.tarih.localeCompare(a.tarih));
+  h += '<div class="card"><div class="hd"><h3>Onay bekleyen mesailerim</h3>'
+    + (bekleyenler.length
+        ? '<span class="bekrozet">'+bekleyenler.length+' kayıt · '+sayi(bekleyenler.reduce((a,x)=>a+x.sure,0))+' saat</span>'
         : '')
-    + '<div class="sp hint">'+liste.length+' kayıt · '
-    + sayi(liste.filter(x=>x.karsilik==='ucret'&&x.durum!=='reddedildi'&&x.durum!=='iptal')
-                .reduce((a,x)=>a+mesaiTutar(x),0))+' ₺</div></div>'
+    + '<div class="sp hint" style="font-size:11.5px">Tüm kayıtlar için üstteki “Toplam mesai” veya “Mesai ücreti” kartına tıklayın</div></div>'
     + '<div class="bd flush"><table class="ptbl" style="width:100%"><thead><tr>'
-    + '<th>'+baslikSecici('mesailerim_ay','Tarih', AY, mesaiAyF.map(ix=>AY[ix]), 'mesaiAySec', true)+'</th>'
-    + '<th>Saat</th><th>Hesaplama</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
-    + (liste.length
-        ? liste.map(x => mesaiSatiri(x,false)).join('') + mesaiDipToplam(liste)
-        : '<tr><td colspan="6"><div class="empty"><div class="e1">Bu dönemde mesai kaydınız yok</div>Tarih başlığından ay seçebilir ya da fazla çalışmanızı kaydedebilirsiniz.</div></td></tr>')
+    + '<th>Tarih</th><th>Saat</th><th>Hesaplama</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
+    + (bekleyenler.length
+        ? bekleyenler.map(x => mesaiSatiri(x,false)).join('')
+        : '<tr><td colspan="6"><div class="empty"><div class="e1">Onay bekleyen mesai yok</div>Tüm kayıtlarını görmek için üstteki kartlara tıklayın.</div></td></tr>')
     + '</tbody></table></div>';
   h += '</div>';
   return h;
@@ -3513,21 +3595,30 @@ function mesaiFormu(pid){
   if(!mesaiAcik(hedef)) return bildir(adSoyad(hedef)+' için mesai girişi kapalı. Personel kartından açılabilir.');
   const secilebilir = S.personel.filter(x => x.aktif && mesaiGirebilir(x.id));
   if(!secilebilir.some(x => x.id === hedef)) return bildir('Bu kişi adına mesai kaydı giremezsiniz.');
+  S.mTakvimAcik = false;
   modalAc('<div class="mh"><h3 class="mbaslik">'
   + (darEkran() ? 'MESAİ KAYDI' : 'Fazla mesai kaydı')
   + '</h3><button class="x" onclick="modalKapat()">×</button></div>'
   + '<div class="mb"><div class="grid g2 mesaigrid">'
   + '<div class="fld yalnizgenis"><label class="lb">Personel</label><select id="m_pid">'
       + secilebilir.map(x=>'<option value="'+x.id+'"'+(x.id===hedef?' selected':'')+'>'+esc(x.ad+' '+x.soyad)+'</option>').join('')+'</select></div>'
-  + tarihFld('Tarih','m_tarih',bugun(),'mesaiHesapla()')
+  + '<div class="fld"><label class="lb">Tarih</label>'
+    + '<button type="button" class="tarihsec" id="m_tarihbtn" onclick="mtakvimAc()">'
+    + '<span id="m_tarihyazi">'+trTarih(bugun())+'</span>'
+    + '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">'
+    + '<rect x="1.5" y="3" width="13" height="11.5" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.3"/>'
+    + '<path d="M1.5 6.5h13M5 1.5v3M11 1.5v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>'
+    + '</svg></button>'
+    + '<input type="hidden" id="m_tarih" value="'+esc(isoToTr(bugun()))+'"></div>'
   + '<div class="ikili tamsat">'
     + '<div class="fld"><label class="lb">Başlangıç saati</label>'
       + '<input type="time" id="m_bas" value="'+mesaiVarsayilanBas()+'" onchange="mesaiHesapla()"></div>'
     + '<div class="fld"><label class="lb">Bitiş saati</label>'
       + '<input type="time" id="m_bit" value="'+saatEkle(mesaiVarsayilanBas(),2)+'" onchange="mesaiHesapla()"></div>'
-    + '<div class="hint tamsat" style="margin-top:-4px">Normal çalışma '+esc(S.ayar.isBitis||'18:00')+' itibarıyla biter</div>'
+    + '<div class="hint tamsat" style="margin-top:-4px">Normal çalışma '+esc(S.ayar.isBitis||'18:00')+' itibarıyla biter · saati elle yazabilirsiniz</div>'
   + '</div>'
   + '</div>'
+  + '<div id="m_takvim"></div>'
   + '<div class="fld mt"><label class="lb">Yapılan iş</label><textarea id="m_ack" placeholder="Hangi iş için çalışıldı?"></textarea></div>'
   + '<div id="m_turbilgi" class="mt"></div>'
   + '<div id="m_ozet" class="mt"></div></div>'
@@ -3542,6 +3633,82 @@ function saatEkle(saat, ekSaat){
   const [h,m] = (saat||'18:00').split(':').map(Number);
   const dk = ((h*60 + m + ekSaat*60) % (24*60) + 24*60) % (24*60);
   return String(Math.floor(dk/60)).padStart(2,'0')+':'+String(dk%60).padStart(2,'0');
+}
+
+/* ---- Mesai saati: yarım saatlik açılır menü (başlangıç / bitiş) ---- */
+function mesaiSaatSecenekleri(){
+  const bas = mesaiVarsayilanBas();          // normal çalışma bitişi (ör. 18:00)
+  const arr = [];
+  for(let i = 0; i <= 16; i++) arr.push(saatEkle(bas, i * 0.5));   // 8 saat, 30 dk adım
+  return arr;
+}
+function mesaiSaatSecici(id, secili){
+  return '<select id="'+id+'" onchange="mesaiHesapla()">'
+    + mesaiSaatSecenekleri().map(t => '<option'+(t===secili?' selected':'')+'>'+t+'</option>').join('')
+    + '</select>';
+}
+
+/* ---- Mesai form-içi tek gün takvimi (izin talebindeki takvimle aynı) ---- */
+function mtakvimAc(){
+  if(S.mTakvimAcik){ S.mTakvimAcik = false; mtakvimCiz(); return; }
+  const iso = trToIso((document.getElementById('m_tarih')||{}).value) || bugun();
+  S.mTakvimYil = yilSinirla(d(iso).getFullYear());
+  S.mTakvimAy  = d(iso).getMonth();
+  S.mTakvimAcik = true;
+  mtakvimCiz();
+}
+function mtakvimKapat(){ S.mTakvimAcik = false; mtakvimCiz(); }
+function mtakvimAyDegis(n){
+  let ay = (S.mTakvimAy||0)+n, yil = S.mTakvimYil || new Date().getFullYear();
+  while(ay<0){ ay+=12; yil--; } while(ay>11){ ay-=12; yil++; }
+  if(yil < ilkYil()){ yil = ilkYil(); ay = 0; }
+  S.mTakvimAy = ay; S.mTakvimYil = yil; mtakvimCiz();
+}
+function mtakvimGunSec(t){
+  const pid = (document.getElementById('m_pid')||{}).value || S.aktifId;
+  if(gecmisTarihMi(t)){ bildir(trTarih(sistemBaslangic())+' tarihinden önceye mesai girilemez.'); return; }
+  if(cikisSonrasiMi(pid, t)){ bildir('İşten çıkış tarihinden ('+trTarih(per(pid).cikis)+') sonrasına mesai girilemez.'); return; }
+  document.getElementById('m_tarih').value = isoToTr(t);
+  const yaz = document.getElementById('m_tarihyazi'); if(yaz) yaz.textContent = trTarih(t);
+  S.mTakvimAcik = false;
+  mtakvimCiz();
+  mesaiHesapla();
+}
+function mtakvimCiz(){
+  const el = document.getElementById('m_takvim'); if(!el) return;
+  if(!S.mTakvimAcik){ el.innerHTML = ''; return; }
+  const yil = S.mTakvimYil, ay = S.mTakvimAy;
+  const secili = trToIso((document.getElementById('m_tarih')||{}).value);
+  const pid = (document.getElementById('m_pid')||{}).value || S.aktifId;
+  const gunSayisi = new Date(yil, ay+1, 0).getDate();
+  const bosluk = (new Date(yil, ay, 1).getDay() + 6) % 7;
+  const bugunS = bugun();
+  let hucre = '';
+  for(let i=0;i<bosluk;i++) hucre += '<div class="fb"></div>';
+  for(let g=1; g<=gunSayisi; g++){
+    const dt = new Date(yil, ay, g), t = iso(dt);
+    const tat = tatilBul(t), we = !S.ayar.calismaGunleri.includes(dt.getDay());
+    const gecmis = gecmisTarihMi(t), cikisSonra = cikisSonrasiMi(pid, t);
+    const secilemez = gecmis || cikisSonra;
+    let c = 'fg';
+    if(tat) c+=' ft'; else if(we) c+=' fw';
+    if(secilemez) c+=' fpas';
+    if(t===secili) c+=' fuc';
+    if(t===bugunS) c+=' fbugun';
+    const ip = gecmis ? trTarih(t)+' · sistem başlangıcından önce'
+      : cikisSonra ? trTarih(t)+' · işten çıkış tarihinden sonra'
+      : trTarih(t)+(tat?' · '+tat.ad:we?' · hafta tatili':'');
+    hucre += '<div class="'+c+'" title="'+esc(ip)+'"'+(secilemez?'':' onclick="mtakvimGunSec(\''+t+'\')"')+'>'+g+'</div>';
+  }
+  el.innerHTML = '<div class="ftak mt">'
+    + '<div class="fth"><button type="button" onclick="mtakvimAyDegis(-1)"'
+      + ((yil<ilkYil()||(yil===ilkYil()&&ay===0))?' disabled':'')+'>‹</button>'
+    + '<b>'+AY[ay]+' '+yil+'</b>'
+    + '<button type="button" onclick="mtakvimAyDegis(1)">›</button>'
+    + '<span class="hint">Mesai gününü seçin</span>'
+    + '<button type="button" class="fkapat" title="Kapat" onclick="mtakvimKapat()">×</button></div>'
+    + '<div class="fgun">'+['Pt','Sa','Ça','Pe','Cu','Ct','Pa'].map(x=>'<div class="fgb">'+x+'</div>').join('')+'</div>'
+    + '<div class="fgun">'+hucre+'</div></div>';
 }
 
 /* Mesai türü tarihten belirlenir — kullanıcı seçmez */
@@ -4160,6 +4327,8 @@ function mesaiDetay(id){
   + (kararVerebilir ? '<div class="fld mt"><label class="lb">Karar notu (isteğe bağlı)</label><input type="text" id="km_not"></div>' : '')
   + '</div><div class="mf">'
   + (mesaiSilinebilir(m) ? '<button class="btn no" style="margin-right:auto" onclick="mesaiSil(\''+id+'\')">Kaydı sil</button>' : '')
+  + ((m.durum==='yonetici_bekliyor' && m.pid===S.aktifId) ? '<button class="btn" onclick="mesaiIptal(\''+id+'\')">Geri çek</button>' : '')
+  + (mesaiIptalTalebi(m) ? '<button class="btn no" onclick="mesaiIptal(\''+id+'\')">İptal talebi</button>' : '')
   + (mesaiRevizeEdilebilir(m) ? '<button class="btn" onclick="mesaiRevizeAc(\''+id+'\')">Revize et</button>' : '')
   + '<button class="btn" onclick="modalKapat()">Kapat</button>'
   + (kararVerebilir ? '<button class="btn no" onclick="mesaiKarar(\''+id+'\',false)">Reddet</button><button class="btn ok" onclick="mesaiKarar(\''+id+'\',true)">Onayla</button>' : '')
@@ -7194,7 +7363,7 @@ async function baslat(){
   $('#ov').onclick = e => { if(e.target.id === 'ov') modalKapat(); };
   document.addEventListener('keydown', e => { if(e.key === 'Escape') modalKapat(); });
   document.addEventListener('keydown', formTuslari);
-  document.addEventListener('click', () => { try{ if(S.acikSecici) seciciKapat(); if(S.dokumAyAcik){ S.dokumAyAcik=false; izinDokumCiz(); } }catch(e){} });
+  document.addEventListener('click', () => { try{ if(S.acikSecici) seciciKapat(); if(S.dokumAyAcik){ S.dokumAyAcik=false; izinDokumCiz(); } if(S.mesaiDokumAyAcik){ S.mesaiDokumAyAcik=false; mesaiDokumCiz(); } }catch(e){} });
 
   ciz();
   if(eksik) bildir(eksik+' eksik alan güncellendi (T.C. no, ücret, lokasyon).');
