@@ -480,6 +480,50 @@ tbody tr:last-child td{border-bottom:0}
 .stat.bolku .yari .v{font-size:23px}
 @media(max-width:520px){ .stat.bolku .yari .v{font-size:20px} }
 
+/* Mesai listesi — aylık kutucuklar ve drilldown */
+.aygrid2{display:grid; grid-template-columns:repeat(6,1fr); gap:10px}
+@media(max-width:1150px){ .aygrid2{grid-template-columns:repeat(4,1fr)} }
+@media(max-width:720px){ .aygrid2{grid-template-columns:repeat(3,1fr)} }
+@media(max-width:460px){ .aygrid2{grid-template-columns:repeat(2,1fr)} }
+.aykutu{border:1px solid var(--line); border-radius:12px; padding:11px 12px; background:var(--surface);
+  cursor:pointer; text-align:left; font:inherit; color:inherit; transition:border-color .12s, box-shadow .12s, background .12s}
+.aykutu:hover:not(.bos){border-color:var(--brand); box-shadow:var(--sh)}
+.aykutu.secili{border-color:var(--brand); background:var(--brand-soft); box-shadow:0 0 0 1px var(--brand) inset}
+.aykutu.bos{opacity:.55; cursor:default}
+.aykutu .ak-ay{font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); font-weight:700}
+.aykutu .ak-tutar{font-family:'Archivo'; font-weight:700; font-size:19px; letter-spacing:-.02em; margin-top:5px; line-height:1}
+.aykutu .ak-tutar small{font-size:11px; color:var(--ink3); font-weight:600}
+.aykutu .ak-alt{font-size:11px; color:var(--ink3); margin-top:4px}
+.aykutu .ak-bek{font-size:10.5px; color:#B0821E; margin-top:2px; font-weight:600}
+
+.msdd{margin-top:16px; border:1px solid var(--line); border-radius:12px; overflow:hidden}
+.msdd .msdd-bas{display:flex; align-items:center; gap:10px; padding:10px 14px;
+  background:var(--line2); border-bottom:1px solid var(--line); font-size:13px}
+.msdept{display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--line);
+  cursor:pointer; background:var(--surface); transition:background .12s}
+.msdept:hover{background:var(--brand-soft)}
+.msdept .msd-ok{color:var(--ink3); font-size:16px; transition:transform .12s; width:12px}
+.msdept.acik .msd-ok{transform:rotate(90deg); color:var(--brand)}
+.msdept .msd-ad{font-weight:600; flex:1; min-width:0; overflow-wrap:anywhere}
+.msdept .msd-say{font-size:11.5px; color:var(--ink3); white-space:nowrap}
+.msdept .msd-tut{font-size:13px; font-weight:700; min-width:92px; text-align:right}
+.mskisi{display:flex; align-items:center; gap:10px; padding:8px 14px 8px 34px;
+  border-bottom:1px solid var(--line); background:var(--bg,#FAFBFC)}
+.mskisi .msk-ad{flex:1; min-width:0; font-size:13px; overflow-wrap:anywhere}
+.mskisi .msd-say{font-size:11.5px; color:var(--ink3); white-space:nowrap}
+.mskisi .msd-tut{font-size:12.5px; font-weight:700; min-width:82px; text-align:right}
+.mskisi:last-child{border-bottom:0}
+
+/* Rol yetki matrisi tablosu */
+.yetkitbl{width:100%; border-collapse:collapse}
+.yetkitbl th, .yetkitbl td{padding:8px 12px; border-bottom:1px solid var(--line2); font-size:13px}
+.yetkitbl thead th{font-size:11.5px; letter-spacing:.03em; color:var(--ink3); font-weight:700}
+.yetkitbl tbody td:first-child{font-weight:500}
+.yetkitbl tr.ygrup td{background:var(--line2); font-weight:700; font-size:11px; letter-spacing:.05em;
+  text-transform:uppercase; color:var(--ink2)}
+.yetkitbl input[type=checkbox]{width:17px; height:17px; cursor:pointer; accent-color:var(--brand)}
+.yetkitbl input[type=checkbox]:disabled{cursor:not-allowed; opacity:.55}
+
 /* ---------- imza: izin şeridi ---------- */
 .balance{background:var(--surface); border:1px solid var(--line); border-radius:var(--r2); padding:18px; box-shadow:var(--sh)}
 .balance .top-row{display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-bottom:14px}
@@ -1743,6 +1787,63 @@ function seviyeTemsilcisi(sv){
 
 function yoneticiMi(){ return seviye() >= 1; }
 
+/* ---- Rol bazlı görünüm/işlem yetki matrisi (İK Ayarlar'dan yönetir) ---- */
+const ROL_ANAHTAR = ['personel','yonetici','ustyonetim','ik'];
+const YETKI_SAYFALARI = [
+  ['onay','Bekleyen onaylar'],
+  ['izinde','İzin raporu'],
+  ['rapor','İzin hakları raporu'],
+  ['mesailiste','Mesai listesi raporu'],
+  ['personel','Personel kartları'],
+  ['kadro','Kadro ve ücret'],
+  ['ayarlar','Ayarlar']
+];
+const YETKI_ISLEMLERI = [
+  ['izinKarar','İzin taleplerini onayla / reddet'],
+  ['mesaiKarar','Mesai taleplerini onayla / reddet']
+];
+const YETKI_VARSAYILAN = {
+  sayfa: {
+    onay:      {personel:false, yonetici:true,  ustyonetim:true,  ik:true},
+    izinde:    {personel:false, yonetici:true,  ustyonetim:true,  ik:true},
+    rapor:     {personel:false, yonetici:true,  ustyonetim:true,  ik:true},
+    mesailiste:{personel:false, yonetici:true,  ustyonetim:true,  ik:true},
+    personel:  {personel:false, yonetici:false, ustyonetim:false, ik:true},
+    kadro:     {personel:false, yonetici:false, ustyonetim:false, ik:true},
+    ayarlar:   {personel:false, yonetici:false, ustyonetim:false, ik:true}
+  },
+  islem: {
+    izinKarar: {personel:false, yonetici:true, ustyonetim:true, ik:true},
+    mesaiKarar:{personel:false, yonetici:true, ustyonetim:true, ik:true}
+  }
+};
+function aktifRol(){ return ROL_ANAHTAR[seviye()] || 'personel'; }
+function yetkiOku(tur, key, rol){
+  const s = S.ayar.yetki && S.ayar.yetki[tur] && S.ayar.yetki[tur][key] && S.ayar.yetki[tur][key][rol];
+  if(s !== undefined) return !!s;
+  const d = YETKI_VARSAYILAN[tur] && YETKI_VARSAYILAN[tur][key] && YETKI_VARSAYILAN[tur][key][rol];
+  return !!d;
+}
+/* İK her zaman tam yetkili (kendini kilitleyememesi için matriste sabit) */
+function sayfaErisir(k){
+  if(aktifRol() === 'ik') return true;
+  const key = k.indexOf('ayar_') === 0 ? 'ayarlar' : k;
+  if(!YETKI_VARSAYILAN.sayfa[key]) return true;         // matriste yoksa herkese açık (izinlerim, mesailerim, takvim)
+  return yetkiOku('sayfa', key, aktifRol());
+}
+function islemYetki(k){
+  if(aktifRol() === 'ik') return true;
+  if(!YETKI_VARSAYILAN.islem[k]) return true;
+  return yetkiOku('islem', k, aktifRol());
+}
+function yetkiDegis(tur, key, rol, deger){
+  S.ayar.yetki = S.ayar.yetki || {};
+  S.ayar.yetki[tur] = S.ayar.yetki[tur] || {};
+  S.ayar.yetki[tur][key] = S.ayar.yetki[tur][key] || {};
+  S.ayar.yetki[tur][key][rol] = deger;
+  kaydet(); ciz();
+}
+
 /* Kimin kaydını görebilirim */
 function gorebilir(pid){
   if(seviye() >= 2) return true;              // İK ve üst yönetim herkesi
@@ -1763,11 +1864,13 @@ function rolAdi(){
 function izinKararVerebilir(i){
   if(!i) return false;
   if(!BEKLEYEN.includes(i.durum)) return false;
+  if(!islemYetki('izinKarar')) return false;
   return per(i.pid)?.yonetici === S.aktifId || (ikMi() && !per(i.pid)?.yonetici);
 }
 function mesaiKararVerebilir(m){
   if(!m) return false;
   if(!BEKLEYEN.includes(m.durum)) return false;
+  if(!islemYetki('mesaiKarar')) return false;
   return per(m.pid)?.yonetici === S.aktifId || (ikMi() && !per(m.pid)?.yonetici);
 }
 
@@ -2509,8 +2612,7 @@ function navCiz(){
   const kuy = onayKuyrugu();
   let html = '', digerHtml = '', sonGrup = '';
   for(const s of SAYFALAR){
-    if(s.ik && !ikMi()) continue;
-    if(s.yonetici && !yoneticiMi()) continue;
+    if(!sayfaErisir(s.k)) continue;
     if(s.kosul && !s.kosul()) continue;
     if(s.grup !== sonGrup){ html += '<div class="grp">'+s.grup+'</div>'; sonGrup = s.grup; }
     const rozet = (s.k === 'onay' && kuy.toplam) ? '<span class="cnt">'+kuy.toplam+'</span>' : '';
@@ -2575,8 +2677,7 @@ function cizGovde(){
   const p = aktif();
   if(!p) return;
   if(!SAYFALAR.some(s=>s.k===S.sayfa)) S.sayfa = 'izinlerim';
-  if(SAYFALAR.find(s=>s.k===S.sayfa)?.ik && !ikMi()) S.sayfa = 'izinlerim';
-  if(SAYFALAR.find(s=>s.k===S.sayfa)?.yonetici && !yoneticiMi()) S.sayfa = 'izinlerim';
+  if(!sayfaErisir(S.sayfa)) S.sayfa = 'izinlerim';
   const kos = SAYFALAR.find(s=>s.k===S.sayfa)?.kosul;
   if(kos && !kos()) S.sayfa = 'izinlerim';
   navCiz(); ustCiz();
@@ -5867,9 +5968,92 @@ function msAra(v){
   const el = document.getElementById('msAraKutu');
   if(el){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
 }
+/* Aylık görünüm — ay kutusu / departman kırılımı aç-kapa */
+function msAyAc(ix){ S.msAcikAy = (S.msAcikAy === ix) ? null : ix; S.msAcikDept = null; ciz(); }
+function msDeptAc(dn){ S.msAcikDept = (S.msAcikDept === dn) ? null : dn; ciz(); }
+
+/* Filtrelenmiş kayıtları ay → departman → kişi olarak topla */
+function msAylikVeri(kayitlar){
+  const aylar = Array.from({length:12}, (_,ix) => ({ix, tutar:0, saat:0, adet:0, bekTutar:0, bekSaat:0, depts:{}}));
+  for(const m of kayitlar){
+    if(m.durum === 'reddedildi' || m.durum === 'iptal') continue;
+    const ix = Number(m.tarih.slice(5,7)) - 1;
+    if(ix < 0 || ix > 11) continue;
+    const a = aylar[ix];
+    const dn = (per(m.pid)?.dept) || '—';
+    const d = a.depts[dn] = a.depts[dn] || {ad:dn, tutar:0, saat:0, adet:0, kisiler:{}};
+    const k = d.kisiler[m.pid] = d.kisiler[m.pid] || {pid:m.pid, tutar:0, saat:0, adet:0};
+    const tut = m.karsilik === 'ucret' ? mesaiTutar(m) : 0;
+    a.adet++; d.adet++; k.adet++;
+    a.saat += m.sure; d.saat += m.sure; k.saat += m.sure;
+    a.tutar += tut; d.tutar += tut; k.tutar += tut;
+    if(BEKLEYEN.includes(m.durum)){ a.bekTutar += tut; a.bekSaat += m.sure; }
+  }
+  return aylar;
+}
+
+function msAylikGorunum(kayitlar){
+  const aylar = msAylikVeri(kayitlar);
+  const yilTutar = aylar.reduce((a,x) => a + x.tutar, 0);
+  const yilSaat  = aylar.reduce((a,x) => a + x.saat, 0);
+  const yilAdet  = aylar.reduce((a,x) => a + x.adet, 0);
+  const acik = (typeof S.msAcikAy === 'number' && aylar[S.msAcikAy] && aylar[S.msAcikAy].adet) ? S.msAcikAy : null;
+
+  let h = '<div class="card"><div class="hd">'
+    + '<span class="hint">'+(seviye() >= 2 ? 'Tüm personel' : 'Bana bağlı personel')+' · '+S.yil+'</span>'
+    + '<div class="sp hint" style="font-size:12px">Yıl toplamı: <b style="color:var(--ink)">'+sayi(yilTutar)+' ₺</b> · '+sayi(yilSaat)+' saat · '+yilAdet+' kayıt</div>'
+    + '</div><div class="bd">';
+
+  h += '<div class="aygrid2">';
+  for(const a of aylar){
+    const bos = a.adet === 0;
+    h += '<button type="button" class="aykutu'+(a.ix===acik?' secili':'')+(bos?' bos':'')+'"'
+      + (bos ? ' disabled' : ' onclick="msAyAc('+a.ix+')"')+'>'
+      + '<div class="ak-ay">'+esc(AY[a.ix])+'</div>'
+      + '<div class="ak-tutar">'+sayi(a.tutar)+' <small>₺</small></div>'
+      + '<div class="ak-alt">'+(bos ? 'kayıt yok' : (sayi(a.saat)+' saat · '+a.adet+' kayıt'))+'</div>'
+      + (a.bekTutar > 0 ? '<div class="ak-bek">'+sayi(a.bekTutar)+' ₺ onay bekliyor</div>' : '')
+      + '</button>';
+  }
+  h += '</div>';
+
+  if(acik !== null) h += msAyDrilldown(aylar[acik]);
+  else h += '<div class="hint" style="margin-top:14px">Bir ay kutusuna tıklayın → departman kırılımı açılır. Departmana tıklayınca o departmandaki kişiler listelenir.</div>';
+
+  return h + '</div></div>';
+}
+
+function msAyDrilldown(a){
+  const depts = Object.values(a.depts).sort((x,y) => y.tutar - x.tutar || x.ad.localeCompare(y.ad,'tr'));
+  let h = '<div class="msdd"><div class="msdd-bas">'
+    + '<b>'+esc(AY[a.ix])+' '+S.yil+'</b><span class="hint" style="font-weight:400">departman kırılımı</span>'
+    + '<div class="sp hint" style="font-weight:400">'+sayi(a.tutar)+' ₺ · '+sayi(a.saat)+' saat · '+a.adet+' kayıt</div>'
+    + '<button class="btn sm" onclick="msAyAc('+a.ix+')">Kapat</button></div>';
+  for(const d of depts){
+    const acikMi = S.msAcikDept === d.ad;
+    h += '<div class="msdept'+(acikMi?' acik':'')+'" data-d="'+esc(d.ad)+'" onclick="msDeptAc(this.dataset.d)">'
+      + '<span class="msd-ok">›</span>'
+      + '<span class="msd-ad">'+esc(d.ad)+'</span>'
+      + '<span class="msd-say">'+Object.keys(d.kisiler).length+' kişi · '+d.adet+' kayıt · '+sayi(d.saat)+' saat</span>'
+      + '<span class="msd-tut mono">'+sayi(d.tutar)+' ₺</span></div>';
+    if(acikMi){
+      const kisiler = Object.values(d.kisiler).sort((x,y) => y.tutar - x.tutar || adSoyad(x.pid).localeCompare(adSoyad(y.pid),'tr'));
+      const bas = S.yil+'-'+String(a.ix+1).padStart(2,'0')+'-01';
+      const bit = S.yil+'-'+String(a.ix+1).padStart(2,'0')+'-31';
+      for(const k of kisiler){
+        h += '<div class="mskisi">'
+          + '<span class="msk-ad">'+esc(adSoyad(k.pid))+'<span class="hint" style="font-weight:400"> · '+esc(per(k.pid)?.unvan||'')+'</span></span>'
+          + '<span class="msd-say">'+k.adet+' kayıt · '+sayi(k.saat)+' saat</span>'
+          + '<span class="msd-tut mono">'+sayi(k.tutar)+' ₺</span>'
+          + '<button class="btn sm" onclick="kisiKayitlari(\''+k.pid+'\',\'mesai\',\''+bas+'\',\''+bit+'\')">Kayıtlar</button></div>';
+      }
+    }
+  }
+  return h + '</div>';
+}
 
 /* Kapsam: üst yönetim ve İK tüm şirket, yönetici kendi kadrosu */
-function msKayitlar(){
+function msKayitlar(ayGozardi){
   const kapsam = takvimKisiler();
   const kisiId = new Set(kapsam.map(p => p.id));
   const q = (msF.q || '').toLocaleLowerCase('tr');
@@ -5877,7 +6061,8 @@ function msKayitlar(){
   return S.mesai.filter(m => {
     if(!kisiId.has(m.pid)) return false;
     const p = per(m.pid); if(!p) return false;
-    if(!ayKapsar(m.tarih, S.yil, 'mesai')) return false;
+    if(m.tarih.slice(0,4) !== String(S.yil)) return false;
+    if(!ayGozardi && !ayKapsar(m.tarih, S.yil, 'mesai')) return false;
     if(m.durum === 'reddedildi') return false;
     if(msF.dept.length && !msF.dept.includes(p.dept)) return false;
     if(msF.lok.length && !msF.lok.includes(p.lokasyon || '')) return false;
@@ -5901,11 +6086,13 @@ function vMesaiListe(){
     + '<div class="hint">'+kapsamAdi+' · '+esc(ayEtiketi(S.yil,'mesai'))+'</div></div>'
     + '<button class="btn" onclick="msDisaAktar()">CSV indir</button></div>';
 
-  const sekme = S.sekme.mesailiste || 'ozet';
+  const sekme = S.sekme.mesailiste || 'aylik';
   h += '<div class="tabs">'
-    + [['ozet','Özet'],['detay','Detay']].map(x =>
+    + [['aylik','Aylık'],['ozet','Kişi özeti'],['detay','Detay']].map(x =>
         '<button class="'+(sekme===x[0]?'on':'')+'" onclick="S.sekme.mesailiste=\''+x[0]+'\';ciz()">'+x[1]+'</button>').join('')
     + '</div>';
+
+  if(sekme === 'aylik') return h + msAylikGorunum(msKayitlar(true));
 
   h += '<div class="card"><div class="hd">'
     + '<span class="hint">'+kayitlar.length+' kayıt'
@@ -6601,6 +6788,27 @@ function kadroListe(){
 
 /* ===================== 12. AYARLAR ===================== */
 
+function rolYetkiHucre(tur, key, rol){
+  const ik = rol === 'ik';
+  const checked = ik ? true : yetkiOku(tur, key, rol);
+  return '<td style="text-align:center">'
+    + '<input type="checkbox"'+(checked?' checked':'')+(ik?' disabled title="İK her zaman tam yetkili"':'')
+    + ' onchange="yetkiDegis(\''+tur+'\',\''+key+'\',\''+rol+'\',this.checked)"></td>';
+}
+function rolYetkiTablo(){
+  const kol = [['personel','Personel'],['yonetici','Yönetici'],['ustyonetim','Üst yönetim'],['ik','İK']];
+  const grup = baslik => '<tr class="ygrup"><td colspan="5">'+baslik+'</td></tr>';
+  const satirlar = (tur, liste) => liste.map(([key,ad]) =>
+    '<tr><td>'+esc(ad)+'</td>'+kol.map(k => rolYetkiHucre(tur, key, k[0])).join('')+'</tr>').join('');
+  return '<div class="tw"><table class="yetkitbl"><thead><tr><th>Yetki</th>'
+    + kol.map(k => '<th style="text-align:center">'+k[1]+'</th>').join('')+'</tr></thead><tbody>'
+    + grup('Görünüm — sayfa erişimi')
+    + satirlar('sayfa', YETKI_SAYFALARI)
+    + grup('İşlem')
+    + satirlar('islem', YETKI_ISLEMLERI)
+    + '</tbody></table></div>';
+}
+
 function vAyar(){
   const a = S.ayar;
   const bolum = {ayar_org:'organizasyon', ayar_izin:'izinkural', ayar_mesai:'mesai', ayar_genel:'genel'}[S.sayfa] || 'organizasyon';
@@ -6682,6 +6890,14 @@ function vAyar(){
 
   const satir = (yetki, kim, gorur, gormez) => '<tr><td style="font-weight:600">'+yetki+'</td>'
     + '<td class="hint">'+kim+'</td><td>'+gorur+'</td><td class="hint">'+gormez+'</td></tr>';
+  if(bolum==='genel') h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Rol yetkileri</h3>'
+    + '<div class="sp hint">Her rolün hangi sayfaları görebileceğini ve hangi işlemleri yapabileceğini işaretleyin</div></div>'
+    + '<div class="bd flush">'+rolYetkiTablo()+'</div>'
+    + '<div class="bd" style="border-top:1px solid var(--line2)"><div class="hint">'
+    + '<b>İK</b> her zaman tam yetkilidir (kilitli, kendini kilitleyememesi için). Bu tablo sayfaların ve işlemlerin <b>açık/kapalı</b> olmasını belirler; '
+    + 'bir kullanıcının hangi <b>kişilerin</b> kaydını göreceği ayrıca yönetici bağıyla sınırlıdır: yönetici yalnızca kendi kadrosunu, üst yönetim ve İK tüm personeli görür.'
+    + '</div></div></div>';
+
   if(bolum==='genel') h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Yetki düzeyleri</h3>'
     + '<div class="sp hint">Kimin neyi göreceği personel kartındaki “Sistem yetkisi” ve yönetici bağından belirlenir</div></div>'
     + '<div class="bd flush"><div class="tw"><table><thead><tr>'
