@@ -2591,7 +2591,7 @@ function tabloEtiketle(){
 
 const SAYFALAR = [
   {k:'izinlerim', ad:'İzinlerim',        ic:'▤', grup:'Kendim'},
-  {k:'mesailerim',ad:'Mesailerim',       ic:'◷', grup:'Kendim', kosul: () => mesaiAcik(S.aktifId)},
+  {k:'mesailerim',ad:'Mesai/Harcırah',   ic:'◷', grup:'Kendim', kosul: () => mesaiAcik(S.aktifId)},
   {k:'onay',      ad:'Bekleyen onaylar', ic:'✓', grup:'Kendim', yonetici:true},
   {k:'takvim',    ad:'İzin takvimi',     ic:'▦', grup:'Raporlar'},
   {k:'izinde',    ad:'İzin raporu',      ic:'☷', grup:'Raporlar', yonetici:true},
@@ -3052,10 +3052,10 @@ function vMesailerim(){
                       && ayUyar(mesaiAyF, d(x.tarih).getMonth()))
                        .sort((a,c) => c.tarih.localeCompare(a.tarih));
   let h = '<div class="row" style="justify-content:space-between;margin-bottom:16px">'
-    + '<div><h1 style="font-size:20px" class="yalnizgenis">Mesailerim</h1>'
+    + '<div><h1 style="font-size:20px" class="yalnizgenis">Mesai/Harcırah</h1>'
     + '<div class="hint yalnizgenis">'+S.yil+' dönemi</div></div>'
     + (mesaiAcik(p.id)
-        ? '<button class="btn pri anabtn mesaibtn" onclick="mesaiFormu()">+ Mesai kaydı</button>'
+        ? '<button class="btn pri anabtn mesaibtn" onclick="mesaiFormu()">+ Mesai/Harcırah kaydı</button>'
         : '<span class="pill" title="Mesai girişiniz kapalı, İK ile görüşün">Mesai girişi kapalı</span>')+'</div>';
 
   const mesaiIkili = '<div class="stat raporlu bolku tiklanir" onclick="mesaiDokum(\''+p.id+'\')">'
@@ -4969,7 +4969,7 @@ function kisiKayitlariCiz(){
   + (izinGirebilir(pid)
       ? (mesaiGorunum
           ? (mesaiAcik(pid)
-              ? '<button class="btn" style="margin-right:auto" onclick="mesaiFormu(\''+pid+'\')">+ Mesai kaydı</button>'
+              ? '<button class="btn" style="margin-right:auto" onclick="mesaiFormu(\''+pid+'\')">+ Mesai/Harcırah kaydı</button>'
               : '<span class="pill" style="margin-right:auto">Mesai girişi kapalı</span>')
           : '<button class="btn" style="margin-right:auto" onclick="izinFormu(\''+pid+'\')">+ İzin gir</button>')
       : '')
@@ -6788,6 +6788,22 @@ function kadroListe(){
 
 /* ===================== 12. AYARLAR ===================== */
 
+/* Harcırah günlük tarifeleri (yurtiçi/yurtdışı, TL veya EUR) */
+function harcirahTarife(){
+  const h = (S.ayar && S.ayar.harcirah) || {};
+  return {
+    yurtici:  {tutar: Number(h.yurtici && h.yurtici.tutar)  || 0, dovis: (h.yurtici && h.yurtici.dovis)  || 'TL'},
+    yurtdisi: {tutar: Number(h.yurtdisi && h.yurtdisi.tutar) || 0, dovis: (h.yurtdisi && h.yurtdisi.dovis) || 'EUR'}
+  };
+}
+function harcirahTarifeYaz(kapsam, alan, deger){
+  S.ayar.harcirah = S.ayar.harcirah || {};
+  S.ayar.harcirah[kapsam] = S.ayar.harcirah[kapsam] || {};
+  S.ayar.harcirah[kapsam][alan] = (alan === 'tutar') ? Number(deger) : deger;
+  kaydet();
+}
+const DOVIZ_SIM = {TL:'₺', EUR:'€'};
+
 function rolYetkiHucre(tur, key, rol){
   const ik = rol === 'ik';
   const checked = ik ? true : yetkiOku(tur, key, rol);
@@ -6886,6 +6902,23 @@ function vAyar(){
       + '<td class="num"><input type="number" step="0.05" value="'+t.carpan+'" style="width:90px;text-align:right" onchange="S.ayar.mesaiTurleri['+ix+'].carpan=Number(this.value);kaydet()"></td></tr>';
   });
   h += '</tbody></table></div></div></div>';
+
+  const ht = harcirahTarife();
+  const dovisSec = (kapsam, secili) => '<select onchange="harcirahTarifeYaz(\''+kapsam+'\',\'dovis\',this.value)">'
+    + ['TL','EUR'].map(x => '<option value="'+x+'"'+(x===secili?' selected':'')+'>'+DOVIZ_SIM[x]+' '+x+'</option>').join('')+'</select>';
+  const htSatir = (kapsam, ad, t) => '<tr><td style="font-weight:600">'+ad+'</td>'
+    + '<td class="num"><input type="number" step="0.01" min="0" value="'+t.tutar+'" style="width:120px;text-align:right" '
+      + 'onchange="harcirahTarifeYaz(\''+kapsam+'\',\'tutar\',this.value)"></td>'
+    + '<td>'+dovisSec(kapsam, t.dovis)+'</td></tr>';
+  h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Harcırah tarifeleri</h3>'
+    + '<div class="sp hint">Görevde geçen her gün için ödenecek günlük harcırah</div></div>'
+    + '<div class="bd flush"><div class="tw"><table><thead><tr>'
+    + '<th>Kapsam</th><th class="num">Günlük tutar</th><th>Para birimi</th></tr></thead><tbody>'
+    + htSatir('yurtici', 'Yurtiçi', ht.yurtici)
+    + htSatir('yurtdisi', 'Yurtdışı', ht.yurtdisi)
+    + '</tbody></table></div></div>'
+    + '<div class="bd" style="border-top:1px solid var(--line2)"><div class="hint">'
+    + 'Harcırah tutarı görevde geçen gün sayısı × günlük tarife olarak hesaplanır. Yurtiçi genelde ₺, yurtdışı € girilir; her ikisi de serbesttir.</div></div></div>';
   }
 
   const satir = (yetki, kim, gorur, gormez) => '<tr><td style="font-weight:600">'+yetki+'</td>'
