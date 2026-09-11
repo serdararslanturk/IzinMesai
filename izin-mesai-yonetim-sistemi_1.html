@@ -529,6 +529,15 @@ tbody tr:last-child td{border-bottom:0}
 .yetkitbl input[type=checkbox]{width:17px; height:17px; cursor:pointer; accent-color:var(--brand)}
 .yetkitbl input[type=checkbox]:disabled{cursor:not-allowed; opacity:.55}
 
+/* Harcırah ülke arama açılır listesi */
+.ulkefld{position:relative}
+.ulkeliste{position:absolute; left:0; right:0; top:100%; z-index:70; margin-top:4px;
+  background:var(--surface); border:1px solid var(--line); border-radius:9px;
+  box-shadow:0 10px 28px rgba(0,0,0,.14); max-height:240px; overflow:auto}
+.ulkeog{padding:9px 12px; cursor:pointer; font-size:13.5px; border-bottom:1px solid var(--line2)}
+.ulkeog:last-child{border-bottom:0}
+.ulkeog:hover{background:var(--brand-soft)}
+
 /* ---------- imza: izin şeridi ---------- */
 .balance{background:var(--surface); border:1px solid var(--line); border-radius:var(--r2); padding:18px; box-shadow:var(--sh)}
 .balance .top-row{display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-bottom:14px}
@@ -3903,9 +3912,27 @@ function mesaiKaydet(){
 }
 
 /* ===================== 7b. HARCIRAH ===================== */
-const ULKELER = ['Türkiye','Almanya','ABD','İngiltere','Fransa','İtalya','İspanya','Hollanda','Belçika',
-  'Avusturya','İsviçre','Rusya','Çin','Japonya','Güney Kore','BAE','Katar','Suudi Arabistan','Azerbaycan',
-  'KKTC','Yunanistan','Bulgaristan','Romanya','Ukrayna','Hindistan','Diğer'];
+const ULKELER = ['Türkiye','KKTC','ABD','İngiltere','Afganistan','Almanya','Amerika Birleşik Devletleri','Andorra','Angola',
+  'Antigua ve Barbuda','Arjantin','Arnavutluk','Avustralya','Avusturya','Azerbaycan','Bahamalar','Bahreyn',
+  'Bangladeş','Barbados','Belçika','Belize','Benin','Beyaz Rusya','Bhutan','Birleşik Arap Emirlikleri',
+  'Birleşik Krallık','Bolivya','Bosna-Hersek','Botsvana','Brezilya','Brunei','Bulgaristan','Burkina Faso',
+  'Burundi','Cabo Verde','Cezayir','Cibuti','Çad','Çekya','Çin','Danimarka','Doğu Timor','Dominik Cumhuriyeti',
+  'Dominika','Ekvador','Ekvator Ginesi','El Salvador','Endonezya','Eritre','Ermenistan','Estonya','Esvatini',
+  'Etiyopya','Fas','Fiji','Fildişi Sahili','Filipinler','Filistin','Finlandiya','Fransa','Gabon','Gambiya','Gana',
+  'Gine','Gine-Bissau','Grenada','Guatemala','Guyana','Güney Afrika','Güney Kore','Güney Sudan','Gürcistan','Haiti',
+  'Hindistan','Hırvatistan','Hollanda','Honduras','Irak','İran','İrlanda','İspanya','İsrail','İsveç','İsviçre',
+  'İtalya','İzlanda','Jamaika','Japonya','Kamboçya','Kamerun','Kanada','Karadağ','Katar','Kazakistan','Kenya',
+  'Kıbrıs','Kırgızistan','Kiribati','Kolombiya','Komorlar','Kongo Cumhuriyeti','Kongo Demokratik Cumhuriyeti',
+  'Kosova','Kosta Rika','Kuveyt','Kuzey Kore','Kuzey Makedonya','Küba','Laos','Lesotho','Letonya','Liberya','Libya',
+  'Liechtenstein','Litvanya','Lübnan','Lüksemburg','Macaristan','Madagaskar','Malavi','Maldivler','Malezya','Mali',
+  'Malta','Marshall Adaları','Mauritius','Meksika','Mısır','Mikronezya','Moğolistan','Moldova','Monako','Moritanya',
+  'Mozambik','Myanmar','Namibya','Nauru','Nepal','Nijer','Nijerya','Nikaragua','Norveç','Orta Afrika Cumhuriyeti',
+  'Özbekistan','Pakistan','Palau','Panama','Papua Yeni Gine','Paraguay','Peru','Polonya','Portekiz','Romanya',
+  'Ruanda','Rusya','Saint Kitts ve Nevis','Saint Lucia','Saint Vincent ve Grenadinler','Samoa','San Marino',
+  'Sao Tome ve Principe','Senegal','Seyşeller','Sırbistan','Sierra Leone','Singapur','Slovakya','Slovenya',
+  'Solomon Adaları','Somali','Sri Lanka','Sudan','Surinam','Suriye','Suudi Arabistan','Şili','Tacikistan','Tanzanya',
+  'Tayland','Tayvan','Togo','Tonga','Trinidad ve Tobago','Tunus','Tuvalu','Türkmenistan','Uganda','Ukrayna','Umman',
+  'Uruguay','Ürdün','Vanuatu','Vatikan','Venezuela','Vietnam','Yemen','Yeni Zelanda','Yunanistan','Zambiya','Zimbabve'];
 const TR_ILLER = ['Adana','Adıyaman','Afyonkarahisar','Ağrı','Aksaray','Amasya','Ankara','Antalya','Ardahan',
   'Artvin','Aydın','Balıkesir','Bartın','Batman','Bayburt','Bilecik','Bingöl','Bitlis','Bolu','Burdur','Bursa',
   'Çanakkale','Çankırı','Çorum','Denizli','Diyarbakır','Düzce','Edirne','Elazığ','Erzincan','Erzurum','Eskişehir',
@@ -3969,9 +3996,29 @@ function harcirahSehirAlani(ulke){
 }
 function harcirahUlkeDegis(){
   const alan = document.getElementById('h_sehiralan');
-  if(alan) alan.innerHTML = harcirahSehirAlani($('#h_ulke').value);
+  if(alan) alan.innerHTML = harcirahSehirAlani(($('#h_ulke').value || '').trim());
   harcirahHesapla();
 }
+/* Türkçe/aksan/BÜYÜK-küçük duyarsız normalleştirme (arama için) */
+function trNorm(s){
+  return String(s == null ? '' : s).toLocaleLowerCase('tr')
+    .replace(/ı/g,'i').replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ö/g,'o').replace(/ş/g,'s').replace(/ü/g,'u')
+    .replace(/[^a-z0-9 ]/g,'').trim();
+}
+function harcirahUlkeAra(q){
+  const el = document.getElementById('h_ulkeliste'); if(!el) return;
+  const nq = trNorm(q);
+  const list = (nq ? ULKELER.filter(u => trNorm(u).includes(nq)) : ULKELER.slice()).slice(0, 12);
+  if(!list.length){ el.hidden = true; el.innerHTML = ''; return; }
+  el.innerHTML = list.map(u => '<div class="ulkeog" onmousedown="event.preventDefault();harcirahUlkeSec('+JSON.stringify(u).replace(/"/g,'&quot;')+')">'+esc(u)+'</div>').join('');
+  el.hidden = false;
+}
+function harcirahUlkeSec(u){
+  const inp = document.getElementById('h_ulke'); if(inp) inp.value = u;
+  harcirahUlkeListeKapat();
+  harcirahUlkeDegis();
+}
+function harcirahUlkeListeKapat(){ const el = document.getElementById('h_ulkeliste'); if(el){ el.hidden = true; el.innerHTML = ''; } }
 function harcirahFormu(pid){
   const hedef = pid || S.aktifId;
   const secilebilir = S.personel.filter(x => x.aktif && izinGirebilir(x.id));
@@ -3981,8 +4028,11 @@ function harcirahFormu(pid){
   + '<div class="grid g2 izingrid">'
   + '<div class="fld yalnizgenis"><label class="lb">Personel</label><select id="h_pid" onchange="harcirahHesapla()">'
     + secilebilir.map(x => '<option value="'+x.id+'"'+(x.id===hedef?' selected':'')+'>'+esc(x.ad+' '+x.soyad)+'</option>').join('')+'</select></div>'
-  + '<div class="fld"><label class="lb">Ülke</label><select id="h_ulke" onchange="harcirahUlkeDegis()">'
-    + ULKELER.map(u => '<option'+(u==='Türkiye'?' selected':'')+'>'+esc(u)+'</option>').join('')+'</select></div>'
+  + '<div class="fld ulkefld"><label class="lb">Ülke</label>'
+    + '<input type="text" id="h_ulke" value="Türkiye" autocomplete="off" placeholder="Ülke arayın…" '
+      + 'oninput="harcirahUlkeAra(this.value)" onfocus="harcirahUlkeAra(this.value)" '
+      + 'onblur="setTimeout(harcirahUlkeListeKapat,150)" onchange="harcirahUlkeDegis()">'
+    + '<div id="h_ulkeliste" class="ulkeliste" hidden></div></div>'
   + '<div class="fld" id="h_sehiralan">'+harcirahSehirAlani('Türkiye')+'</div>'
   + '<div class="fld"><label class="lb">Görev tarihleri</label>'
     + '<button type="button" class="tarihsec" id="h_tarihbtn" onclick="htakvimAc(\'h_bas\')">'
@@ -4108,7 +4158,8 @@ function harcirahHesapla(){
 function harcirahKaydet(){
   const pid = $('#h_pid') ? $('#h_pid').value : S.aktifId;
   if(!izinGirebilir(pid)){ bildir('Bu kişi adına harcırah giremezsiniz.'); return; }
-  const ulke = $('#h_ulke').value;
+  const ulke = ($('#h_ulke').value || '').trim();
+  if(!ulke){ bildir('Ülke seçin.'); return; }
   const sehir = $('#h_sehir') ? $('#h_sehir').value.trim() : '';
   const bas = tarihAl('h_bas'), bit = tarihAl('h_bit');
   if(!bas || !bit){ bildir('Görev tarih aralığını seçin.'); return; }
