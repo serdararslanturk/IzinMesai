@@ -108,6 +108,11 @@ select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml
 .btn:hover{background:var(--surface2); border-color:#C6D0CB}
 .btn.pri{background:var(--brand); border-color:var(--brand); color:#fff}
 .btn.pri:hover{background:var(--brand-deep); border-color:var(--brand-deep)}
+/* Mesai ve Harcırah ana butonları farklı renkte */
+.btn.pri.mesaibtn{background:#E08E6F; border-color:#d17d5d; color:#3d1d12}
+.btn.pri.mesaibtn:hover{background:#d17d5d; border-color:#c06f50}
+.btn.pri.harcbtn{background:#3F7CB8; border-color:#356aa0; color:#fff}
+.btn.pri.harcbtn:hover{background:#356aa0; border-color:#2c5988}
 .btn.ok{background:var(--onay); border-color:var(--onay); color:#fff}
 .btn.ok:hover{filter:brightness(.93)}
 .btn.no{background:var(--surface); border-color:var(--red-line); color:var(--red)}
@@ -1800,7 +1805,8 @@ const YETKI_SAYFALARI = [
 ];
 const YETKI_ISLEMLERI = [
   ['izinKarar','İzin taleplerini onayla / reddet'],
-  ['mesaiKarar','Mesai taleplerini onayla / reddet']
+  ['mesaiKarar','Mesai taleplerini onayla / reddet'],
+  ['harcirahKarar','Harcırah taleplerini onayla / reddet']
 ];
 const YETKI_VARSAYILAN = {
   sayfa: {
@@ -1813,8 +1819,9 @@ const YETKI_VARSAYILAN = {
     ayarlar:   {personel:false, yonetici:false, ustyonetim:false, ik:true}
   },
   islem: {
-    izinKarar: {personel:false, yonetici:true, ustyonetim:true, ik:true},
-    mesaiKarar:{personel:false, yonetici:true, ustyonetim:true, ik:true}
+    izinKarar:    {personel:false, yonetici:true, ustyonetim:true, ik:true},
+    mesaiKarar:   {personel:false, yonetici:true, ustyonetim:true, ik:true},
+    harcirahKarar:{personel:false, yonetici:true, ustyonetim:true, ik:true}
   }
 };
 function aktifRol(){ return ROL_ANAHTAR[seviye()] || 'personel'; }
@@ -1876,10 +1883,11 @@ function mesaiKararVerebilir(m){
 
 /* Onay kuyruğu: bu kullanıcının karar vermesi gereken kayıtlar */
 function onayKuyrugu(){
-  if(seviye() < 1) return {izinler:[], mesailer:[], toplam:0};
+  if(seviye() < 1) return {izinler:[], mesailer:[], harcirahlar:[], toplam:0};
   const izinler = S.izin.filter(izinKararVerebilir);
   const mesailer = S.mesai.filter(mesaiKararVerebilir);
-  return {izinler, mesailer, toplam: izinler.length + mesailer.length};
+  const harcirahlar = (S.harcirah || []).filter(harcirahKararVerebilir);
+  return {izinler, mesailer, harcirahlar, toplam: izinler.length + mesailer.length + harcirahlar.length};
 }
 
 /* --- Kişinin kendi izinleriyle tarih çakışması --- */
@@ -3054,9 +3062,12 @@ function vMesailerim(){
   let h = '<div class="row" style="justify-content:space-between;margin-bottom:16px">'
     + '<div><h1 style="font-size:20px" class="yalnizgenis">Mesai/Harcırah</h1>'
     + '<div class="hint yalnizgenis">'+S.yil+' dönemi</div></div>'
+    + '<div class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">'
     + (mesaiAcik(p.id)
-        ? '<button class="btn pri anabtn mesaibtn" onclick="mesaiFormu()">+ Mesai/Harcırah kaydı</button>'
-        : '<span class="pill" title="Mesai girişiniz kapalı, İK ile görüşün">Mesai girişi kapalı</span>')+'</div>';
+        ? '<button class="btn pri anabtn mesaibtn" onclick="mesaiFormu()">+ Mesai kaydı</button>'
+        : '<span class="pill" title="Mesai girişiniz kapalı, İK ile görüşün">Mesai girişi kapalı</span>')
+    + '<button class="btn pri anabtn harcbtn" onclick="harcirahFormu()">+ Harcırah kaydı</button>'
+    + '</div></div>';
 
   const mesaiIkili = '<div class="stat raporlu bolku tiklanir" onclick="mesaiDokum(\''+p.id+'\')">'
     + '<div class="yarilar">'
@@ -3096,6 +3107,21 @@ function vMesailerim(){
         : '<tr><td colspan="6"><div class="empty"><div class="e1">Onay bekleyen mesai yok</div>Tüm kayıtlarını görmek için üstteki kartlara tıklayın.</div></td></tr>')
     + '</tbody></table></div>';
   h += '</div>';
+
+  // ---- Harcırahlarım ----
+  const hrcList = (S.harcirah || []).filter(x => x.pid === p.id && x.bas.slice(0,4) === String(S.yil))
+                                    .sort((a,c) => c.bas.localeCompare(a.bas));
+  const hrcTop = harcirahToplamMetni(hrcList);
+  h += '<div class="card" style="margin-top:14px"><div class="hd"><h3>Harcırahlarım</h3>'
+    + (hrcTop ? '<span class="bekrozet">'+hrcTop+'</span>' : '')
+    + '<div class="sp hint" style="font-size:11.5px">Görev harcırahları</div></div>'
+    + '<div class="bd flush"><table class="ptbl" style="width:100%"><thead><tr>'
+    + '<th>Ülke / Şehir</th><th>Tarih aralığı</th><th class="num">Gün</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
+    + (hrcList.length
+        ? hrcList.map(x => harcirahSatiri(x, false)).join('')
+        : '<tr><td colspan="6"><div class="empty"><div class="e1">Harcırah kaydı yok</div>Görev harcırahı için “+ Harcırah kaydı”na tıklayın.</div></td></tr>')
+    + '</tbody></table></div></div>';
+
   return h;
 }
 function mesaiAySec(ix){ if(ix===null){ mesaiAyF = tumunuSecToggle(mesaiAyF, [...Array(12).keys()]); ciz(); return; } ayAc('mesai', ix); }
@@ -3876,6 +3902,252 @@ function mesaiKaydet(){
   kaydet(); modalKapat(); bildir('Mesai kaydı gönderildi.');
 }
 
+/* ===================== 7b. HARCIRAH ===================== */
+const ULKELER = ['Türkiye','Almanya','ABD','İngiltere','Fransa','İtalya','İspanya','Hollanda','Belçika',
+  'Avusturya','İsviçre','Rusya','Çin','Japonya','Güney Kore','BAE','Katar','Suudi Arabistan','Azerbaycan',
+  'KKTC','Yunanistan','Bulgaristan','Romanya','Ukrayna','Hindistan','Diğer'];
+const TR_ILLER = ['Adana','Adıyaman','Afyonkarahisar','Ağrı','Aksaray','Amasya','Ankara','Antalya','Ardahan',
+  'Artvin','Aydın','Balıkesir','Bartın','Batman','Bayburt','Bilecik','Bingöl','Bitlis','Bolu','Burdur','Bursa',
+  'Çanakkale','Çankırı','Çorum','Denizli','Diyarbakır','Düzce','Edirne','Elazığ','Erzincan','Erzurum','Eskişehir',
+  'Gaziantep','Giresun','Gümüşhane','Hakkâri','Hatay','Iğdır','Isparta','İstanbul','İzmir','Kahramanmaraş','Karabük',
+  'Karaman','Kars','Kastamonu','Kayseri','Kırıkkale','Kırklareli','Kırşehir','Kilis','Kocaeli','Konya','Kütahya',
+  'Malatya','Manisa','Mardin','Mersin','Muğla','Muş','Nevşehir','Niğde','Ordu','Osmaniye','Rize','Sakarya','Samsun',
+  'Siirt','Sinop','Sivas','Şanlıurfa','Şırnak','Tekirdağ','Tokat','Trabzon','Tunceli','Uşak','Van','Yalova','Yozgat','Zonguldak'];
+
+function harcirahKapsam(ulke){ return ulke === 'Türkiye' ? 'yurtici' : 'yurtdisi'; }
+function harcirahGun(bas, bit){ return Math.round((d(bit) - d(bas)) / 86400000) + 1; }   // takvim günü, dahil
+function harcirahHesap(ulke, bas, bit){
+  const kapsam = harcirahKapsam(ulke);
+  const t = harcirahTarife()[kapsam];
+  const gun = (bas && bit) ? harcirahGun(bas, bit) : 0;
+  return {kapsam, gunluk: t.tutar, dovis: t.dovis, gun, tutar: gun * t.tutar};
+}
+/* Kişinin başka bir harcırahıyla tarih çakışması */
+function harcirahCakismasi(pid, bas, bit, haricId){
+  if(!bas || !bit) return [];
+  return (S.harcirah || []).filter(x => x.pid === pid && x.id !== haricId
+    && (GECERLI.includes(x.durum) || BEKLEYEN.includes(x.durum))
+    && !(x.bit < bas || x.bas > bit))
+    .sort((a,b) => a.bas.localeCompare(b.bas));
+}
+function harcirahToplamMetni(list){
+  const g = {}; let n = 0;
+  for(const x of list){ if(x.durum === 'reddedildi' || x.durum === 'iptal') continue; n++; g[x.dovis || 'TL'] = (g[x.dovis || 'TL'] || 0) + x.tutar; }
+  if(!n) return '';
+  return n + ' kayıt · ' + Object.entries(g).map(([dv,v]) => sayi(v) + ' ' + (DOVIZ_SIM[dv] || dv)).join(' · ');
+}
+function harcirahKararVerebilir(x){
+  if(!x) return false;
+  if(!BEKLEYEN.includes(x.durum)) return false;
+  if(!islemYetki('harcirahKarar')) return false;
+  return per(x.pid)?.yonetici === S.aktifId || (ikMi() && !per(x.pid)?.yonetici);
+}
+function harcirahSatiri(x, yon){
+  let ops = '';
+  if(harcirahKararVerebilir(x))
+    ops += '<button class="btn sm ok" onclick="harcirahKarar(\''+x.id+'\',true)">Onayla</button> '
+         + '<button class="btn sm no" onclick="harcirahKarar(\''+x.id+'\',false)">Reddet</button> ';
+  if(x.pid === S.aktifId && BEKLEYEN.includes(x.durum))
+    ops += '<button class="btn sm" onclick="harcirahIptal(\''+x.id+'\')">Geri çek</button> ';
+  if(ikMi() || (x.pid === S.aktifId && x.durum !== 'onaylandi'))
+    ops += '<button class="btn sm no" onclick="harcirahSil(\''+x.id+'\')">Sil</button> ';
+  return '<tr class="kart">'
+    + (yon ? '<td data-e="Personel"><div style="font-weight:600">'+esc(adSoyad(x.pid))+'</div><div class="hint">'+esc(per(x.pid)?.dept||'')+'</div></td>' : '')
+    + '<td data-e="Ülke / Şehir"><div style="font-weight:600">'+esc(x.ulke)+'</div><div class="hint">'+esc(x.sehir||'')+(x.kapsam==='yurtdisi'?' · yurtdışı':'')+'</div></td>'
+    + '<td data-e="Tarih aralığı" class="mono" style="font-size:12.5px;white-space:nowrap">'+trTarih(x.bas)+' – '+trTarih(x.bit)+'</td>'
+    + '<td data-e="Gün" class="num" style="font-weight:600">'+sayi(x.gun)+'</td>'
+    + '<td data-e="Tutar" class="num mono" style="font-size:12.5px">'+sayi(x.tutar)+' '+(DOVIZ_SIM[x.dovis]||x.dovis||'')+'</td>'
+    + '<td data-e="Durum">'+durumTag(x.durum)+'</td>'
+    + '<td class="str">'+(ops || '<span class="hint" style="font-size:11px">—</span>')+'</td></tr>';
+}
+
+function harcirahSehirAlani(ulke){
+  if(ulke === 'Türkiye')
+    return '<label class="lb">Şehir</label><select id="h_sehir" onchange="harcirahHesapla()">'
+      + '<option value="">Seçin…</option>' + TR_ILLER.map(il => '<option>'+esc(il)+'</option>').join('') + '</select>';
+  return '<label class="lb">Şehir</label><input type="text" id="h_sehir" placeholder="Şehir" oninput="harcirahHesapla()">';
+}
+function harcirahUlkeDegis(){
+  const alan = document.getElementById('h_sehiralan');
+  if(alan) alan.innerHTML = harcirahSehirAlani($('#h_ulke').value);
+  harcirahHesapla();
+}
+function harcirahFormu(pid){
+  const hedef = pid || S.aktifId;
+  const secilebilir = S.personel.filter(x => x.aktif && izinGirebilir(x.id));
+  if(!secilebilir.some(x => x.id === hedef)) return bildir('Bu kişi adına harcırah giremezsiniz.');
+  modalAc('<div class="mh"><h3 class="mbaslik">'+(darEkran()?'HARCIRAH':'Harcırah kaydı')
+  + '</h3><button class="x" onclick="modalKapat()">×</button></div><div class="mb">'
+  + '<div class="grid g2 izingrid">'
+  + '<div class="fld yalnizgenis"><label class="lb">Personel</label><select id="h_pid" onchange="harcirahHesapla()">'
+    + secilebilir.map(x => '<option value="'+x.id+'"'+(x.id===hedef?' selected':'')+'>'+esc(x.ad+' '+x.soyad)+'</option>').join('')+'</select></div>'
+  + '<div class="fld"><label class="lb">Ülke</label><select id="h_ulke" onchange="harcirahUlkeDegis()">'
+    + ULKELER.map(u => '<option'+(u==='Türkiye'?' selected':'')+'>'+esc(u)+'</option>').join('')+'</select></div>'
+  + '<div class="fld" id="h_sehiralan">'+harcirahSehirAlani('Türkiye')+'</div>'
+  + '<div class="fld"><label class="lb">Görev tarihleri</label>'
+    + '<button type="button" class="tarihsec" id="h_tarihbtn" onclick="htakvimAc(\'h_bas\')">'
+    + '<span id="h_tarihyazi">Takvimden seçin</span>'
+    + '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">'
+    + '<rect x="1.5" y="3" width="13" height="11.5" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.3"/>'
+    + '<path d="M1.5 6.5h13M5 1.5v3M11 1.5v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>'
+    + '</svg></button></div>'
+  + '</div>'
+  + '<input type="hidden" id="h_bas"><input type="hidden" id="h_bit">'
+  + '<div id="h_takvim"></div>'
+  + '<div id="h_ozet" class="mt"></div>'
+  + '<div class="fld mt"><label class="lb">Açıklama</label><textarea id="h_ack" placeholder="Görevin amacı, gidilen kurum, notlar…"></textarea></div>'
+  + '<div id="h_uyari" class="mt"></div>'
+  + '</div><div class="mf"><button class="btn" onclick="modalKapat()">Vazgeç</button>'
+  + '<button class="btn pri" onclick="harcirahKaydet()">Kaydı gönder</button></div>');
+  S.hTakAcik = ''; S.hTakYil = yilSinirla(d(bugun()).getFullYear()); S.hTakAy = d(bugun()).getMonth();
+  harcirahHesapla();
+}
+function htakvimAc(id){
+  if(S.hTakAcik === id){ S.hTakAcik = ''; htakvimCiz(); return; }
+  S.hTakAcik = id;
+  const mevcut = tarihAl(id) || tarihAl('h_bas') || bugun();
+  S.hTakYil = yilSinirla(d(mevcut).getFullYear());
+  S.hTakAy  = d(mevcut).getMonth();
+  htakvimCiz();
+}
+function htakvimKapat(){ S.hTakAcik = ''; htakvimCiz(); }
+function htakvimAyDegis(n){
+  let ay = (S.hTakAy || 0) + n, yil = S.hTakYil || new Date().getFullYear();
+  while(ay < 0){ ay += 12; yil--; }
+  while(ay > 11){ ay -= 12; yil++; }
+  if(yil < ilkYil()){ yil = ilkYil(); ay = 0; }
+  S.hTakAy = ay; S.hTakYil = yil;
+  htakvimCiz();
+}
+function htakvimGunSec(t){
+  const pid = $('#h_pid') ? $('#h_pid').value : S.aktifId;
+  if(gecmisTarihMi(t)){ bildir(trTarih(sistemBaslangic())+' tarihinden önceye harcırah girilemez.'); return; }
+  if(cikisSonrasiMi(pid, t)){ bildir('İşten çıkış tarihinden ('+trTarih(per(pid).cikis)+') sonrasına harcırah girilemez.'); return; }
+  if(harcirahCakismasi(pid, t, t, null).length){ bildir(trTarih(t)+' tarihinde zaten harcırah kaydınız var.'); return; }
+  const bas = tarihAl('h_bas'), bit = tarihAl('h_bit');
+  const hedef = S.hTakAcik || 'h_bas';
+  if(hedef === 'h_bit'){
+    if(bas && t < bas){ bildir('Bitiş, başlangıçtan önce olamaz.'); return; }
+    if(bas && harcirahCakismasi(pid, bas, t, null).length){ bildir('Seçtiğiniz aralık mevcut bir harcırahla çakışıyor.'); return; }
+    $('#h_bit').value = isoToTr(t);
+    S.hTakAcik = '';
+  } else {
+    $('#h_bas').value = isoToTr(t);
+    if(!bit || bit < t) $('#h_bit').value = '';
+    S.hTakAcik = 'h_bit';
+  }
+  harcirahHesapla();
+}
+function htakvimCiz(){
+  const el = document.getElementById('h_takvim');
+  if(!el) return;
+  if(!S.hTakAcik){ el.innerHTML = ''; return; }
+  const pid = $('#h_pid') ? $('#h_pid').value : S.aktifId;
+  const yil = S.hTakYil, ay = S.hTakAy;
+  const bas = tarihAl('h_bas'), bit = tarihAl('h_bit');
+  const gunSayisi = new Date(yil, ay + 1, 0).getDate();
+  const bosluk = (new Date(yil, ay, 1).getDay() + 6) % 7;
+  const bugunS = bugun();
+  let hucre = '';
+  for(let i = 0; i < bosluk; i++) hucre += '<div class="fb"></div>';
+  for(let g = 1; g <= gunSayisi; g++){
+    const dt = new Date(yil, ay, g), t = iso(dt);
+    const dolu = harcirahCakismasi(pid, t, t, null)[0];
+    const gecmis = gecmisTarihMi(t);
+    const cikisSonra = cikisSonrasiMi(pid, t);
+    const secilemez = !!dolu || gecmis || cikisSonra;
+    let c = 'fg';
+    if(dolu) c += ' fizin';
+    if(gecmis || cikisSonra) c += ' fpas';
+    if(bas && bit && t >= bas && t <= bit) c += ' fara';
+    if(t === bas || (t === bit && bit)) c += ' fuc';
+    if(t === bugunS) c += ' fbugun';
+    const ip = dolu ? trTarih(t)+' · zaten harcırah kaydı ('+DURUM_AD[dolu.durum]+')'
+      : gecmis ? trTarih(t)+' · sistem başlangıcından önce'
+      : cikisSonra ? trTarih(t)+' · işten çıkış tarihinden sonra' : trTarih(t);
+    hucre += '<div class="'+c+'" title="'+esc(ip)+'"'+(secilemez ? '' : ' onclick="htakvimGunSec(\''+t+'\')"')+'>'+g+'</div>';
+  }
+  el.innerHTML = '<div class="ftak mt"><div class="fth">'
+    + '<button type="button" onclick="htakvimAyDegis(-1)"'+((yil < ilkYil() || (yil === ilkYil() && ay === 0)) ? ' disabled' : '')+'>‹</button>'
+    + '<b>'+AY[ay]+' '+yil+'</b><button type="button" onclick="htakvimAyDegis(1)">›</button>'
+    + '<span class="hint">'+(S.hTakAcik === 'h_bit' ? 'Bitiş gününü seçin' : 'Başlangıç gününü seçin')+'</span>'
+    + '<button type="button" class="fkapat" title="Kapat" onclick="htakvimKapat()">×</button></div>'
+    + '<div class="fgun">'+['Pt','Sa','Ça','Pe','Cu','Ct','Pa'].map(x=>'<div class="fgb">'+x+'</div>').join('')+'</div>'
+    + '<div class="fgun">'+hucre+'</div>'
+    + '<div class="fleg"><span><i class="fs fizin"></i>Harcırah girilmiş gün</span><span><i class="fs fuc"></i>Seçilen aralık</span></div></div>';
+}
+function harcirahHesapla(){
+  const pid = $('#h_pid') ? $('#h_pid').value : S.aktifId;
+  const ulke = $('#h_ulke') ? $('#h_ulke').value : 'Türkiye';
+  const sehir = $('#h_sehir') ? $('#h_sehir').value.trim() : '';
+  const bas = tarihAl('h_bas'), bit = tarihAl('h_bit');
+  const yazi = document.getElementById('h_tarihyazi');
+  if(yazi) yazi.textContent = (bas && bit) ? (trTarih(bas)+' – '+trTarih(bit)) : (bas ? trTarih(bas)+' – …' : 'Takvimden seçin');
+  htakvimCiz();
+  const ozet = document.getElementById('h_ozet');
+  const uyari = document.getElementById('h_uyari');
+  if(uyari) uyari.innerHTML = '';
+  if(!bas || !bit){ if(ozet) ozet.innerHTML = ''; return; }
+  const hp = harcirahHesap(ulke, bas, bit);
+  const cak = harcirahCakismasi(pid, bas, bit, null);
+  if(cak.length && uyari) uyari.innerHTML = kutu('r','Tarih çakışması',
+    'Bu tarihlerde zaten harcırah kaydınız var: '+cak.map(x=>trTarih(x.bas)+' – '+trTarih(x.bit)).join(', '));
+  else if(!hp.gunluk && uyari) uyari.innerHTML = kutu('b','Tarife tanımlı değil',
+    'Ayarlar → Mesai → Harcırah tarifeleri bölümünden '+(hp.kapsam==='yurtici'?'yurtiçi':'yurtdışı')+' günlük tutarı girin.');
+  const sim = DOVIZ_SIM[hp.dovis] || hp.dovis;
+  const oz = (et, dg) => '<div class="row" style="justify-content:space-between;padding:5px 0"><span class="hint">'+et+'</span><span>'+dg+'</span></div>';
+  if(ozet) ozet.innerHTML = '<div class="card" style="margin:0"><div class="bd" style="padding:10px 14px">'
+    + oz('Görev yeri', esc(ulke)+(sehir?' · '+esc(sehir):''))
+    + oz('Kapsam', hp.kapsam==='yurtici'?'Yurtiçi':'Yurtdışı')
+    + oz('Gün sayısı', '<b>'+sayi(hp.gun)+'</b> gün')
+    + oz('Günlük harcırah', hp.gunluk ? sayi(hp.gunluk)+' '+sim : '<span style="color:var(--red)">tanımlı değil</span>')
+    + '<div class="row" style="justify-content:space-between;padding:7px 0 0;border-top:1px solid var(--line2);margin-top:3px">'
+      + '<b>Toplam</b><b style="font-size:16px">'+sayi(hp.tutar)+' '+sim+'</b></div>'
+    + '</div></div>';
+}
+function harcirahKaydet(){
+  const pid = $('#h_pid') ? $('#h_pid').value : S.aktifId;
+  if(!izinGirebilir(pid)){ bildir('Bu kişi adına harcırah giremezsiniz.'); return; }
+  const ulke = $('#h_ulke').value;
+  const sehir = $('#h_sehir') ? $('#h_sehir').value.trim() : '';
+  const bas = tarihAl('h_bas'), bit = tarihAl('h_bit');
+  if(!bas || !bit){ bildir('Görev tarih aralığını seçin.'); return; }
+  if(bit < bas){ bildir('Bitiş, başlangıçtan önce olamaz.'); return; }
+  if(!sehir){ bildir('Şehir bilgisini girin.'); return; }
+  if(gecmisTarihMi(bas)){ bildir(trTarih(sistemBaslangic())+' tarihinden önceye harcırah girilemez.'); return; }
+  if(cikisSonrasiMi(pid, bit)){ bildir('İşten çıkış tarihinden sonrasına harcırah girilemez.'); return; }
+  if(harcirahCakismasi(pid, bas, bit, null).length){ bildir('Bu tarihlerde zaten harcırah kaydı var.'); return; }
+  const hp = harcirahHesap(ulke, bas, bit);
+  if(!hp.gunluk){ bildir('Ayarlarda '+(hp.kapsam==='yurtici'?'yurtiçi':'yurtdışı')+' harcırah tarifesi tanımlı değil.'); return; }
+  const yonetici = per(pid)?.yonetici;
+  S.harcirah = S.harcirah || [];
+  S.harcirah.push({ id:yeniId('h'), pid, ulke, sehir, kapsam:hp.kapsam, bas, bit, gun:hp.gun,
+    gunluk:hp.gunluk, dovis:hp.dovis, tutar:hp.tutar,
+    aciklama: $('#h_ack') ? $('#h_ack').value.trim() : '',
+    durum: yonetici ? 'yonetici_bekliyor' : 'onaylandi', gecmis:[] });
+  kaydet(); modalKapat(); bildir('Harcırah kaydı gönderildi.');
+}
+function harcirahKarar(id, onay){
+  const x = (S.harcirah || []).find(h => h.id === id); if(!x) return;
+  if(!harcirahKararVerebilir(x)){ bildir('Bu kayda karar verme yetkiniz yok.'); return; }
+  x.gecmis = x.gecmis || [];
+  x.gecmis.push({rol:'Yönetici', kisi:adSoyad(S.aktifId), karar:onay?'Onaylandı':'Reddedildi', tarih:bugun(), not:''});
+  x.durum = onay ? 'onaylandi' : 'reddedildi';
+  kaydet(); ciz();
+  bildir(adSoyad(x.pid)+' · harcırah '+(onay?'onaylandı.':'reddedildi.'));
+}
+function harcirahIptal(id){
+  const x = (S.harcirah || []).find(h => h.id === id); if(!x) return;
+  if(!(x.pid === S.aktifId && BEKLEYEN.includes(x.durum))){ bildir('Bu kaydı geri çekemezsiniz.'); return; }
+  x.durum = 'iptal'; kaydet(); ciz(); bildir('Harcırah kaydı geri çekildi.');
+}
+function harcirahSil(id){
+  const x = (S.harcirah || []).find(h => h.id === id); if(!x) return;
+  if(!(ikMi() || (x.pid === S.aktifId && x.durum !== 'onaylandi'))){ bildir('Bu kaydı silme yetkiniz yok.'); return; }
+  onayIste('Harcırah kaydını sil', trTarih(x.bas)+' – '+trTarih(x.bit)+' · '+esc(x.ulke)+' harcırah kaydı silinecek.', 'Sil',
+    () => { S.harcirah = (S.harcirah || []).filter(h => h.id !== id); kaydet(); ciz(); bildir('Harcırah kaydı silindi.'); });
+}
+
 /* ===================== 8. ONAY AKIŞI ===================== */
 
 function gecmisHtml(g){
@@ -4576,6 +4848,13 @@ function vOnay(){
   if(!k.mesailer.length) h += '<div class="empty"><div class="e1">Bekleyen mesai kaydı yok</div>Onaya düşen mesailer burada listelenir.</div>';
   else h += '<div class="twpair">'+ustCubuk()+'<div class="tw"><table class="ptbl"><thead><tr><th>Personel</th><th>Tarih</th><th>Saat</th><th>Hesaplama</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
     + k.mesailer.sort((a,b)=>a.tarih.localeCompare(b.tarih)).map(m=>mesaiSatiri(m,true)).join('') + '</tbody></table></div></div>';
+  h += '</div></div>';
+
+  h += '<div class="card" style="margin-top:14px"><div class="hd"><h3>Harcırah talepleri</h3>'
+    + '<div class="sp"><span class="hint">'+k.harcirahlar.length+' kayıt</span></div></div><div class="bd flush">';
+  if(!k.harcirahlar.length) h += '<div class="empty"><div class="e1">Bekleyen harcırah yok</div>Onaya düşen görev harcırahları burada listelenir.</div>';
+  else h += '<div class="twpair">'+ustCubuk()+'<div class="tw"><table class="ptbl"><thead><tr><th>Personel</th><th>Ülke / Şehir</th><th>Tarih aralığı</th><th class="num">Gün</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
+    + k.harcirahlar.sort((a,b)=>a.bas.localeCompare(b.bas)).map(x=>harcirahSatiri(x,true)).join('') + '</tbody></table></div></div>';
   h += '</div></div>';
   return h;
 }
@@ -6796,10 +7075,19 @@ function harcirahTarife(){
     yurtdisi: {tutar: Number(h.yurtdisi && h.yurtdisi.tutar) || 0, dovis: (h.yurtdisi && h.yurtdisi.dovis) || 'EUR'}
   };
 }
+/* "1.234,56" / "1234.56" / "1234" → sayı; boş/geçersiz → 0 */
+function paraCoz(v){
+  v = String(v == null ? '' : v).trim().replace(/\s/g, '').replace(/[₺€$]/g, '');
+  if(!v) return 0;
+  if(v.indexOf(',') > -1) v = v.replace(/\./g, '').replace(',', '.');   // 1.234,56 → 1234.56
+  else if(/^\d{1,3}(\.\d{3})+$/.test(v)) v = v.replace(/\./g, '');       // 2.500 / 1.234.567 → binlik ayırıcı
+  const n = parseFloat(v);
+  return isFinite(n) ? n : 0;
+}
 function harcirahTarifeYaz(kapsam, alan, deger){
   S.ayar.harcirah = S.ayar.harcirah || {};
   S.ayar.harcirah[kapsam] = S.ayar.harcirah[kapsam] || {};
-  S.ayar.harcirah[kapsam][alan] = (alan === 'tutar') ? Number(deger) : deger;
+  S.ayar.harcirah[kapsam][alan] = (alan === 'tutar') ? paraCoz(deger) : deger;
   kaydet();
 }
 const DOVIZ_SIM = {TL:'₺', EUR:'€'};
@@ -6907,7 +7195,7 @@ function vAyar(){
   const dovisSec = (kapsam, secili) => '<select onchange="harcirahTarifeYaz(\''+kapsam+'\',\'dovis\',this.value)">'
     + ['TL','EUR'].map(x => '<option value="'+x+'"'+(x===secili?' selected':'')+'>'+DOVIZ_SIM[x]+' '+x+'</option>').join('')+'</select>';
   const htSatir = (kapsam, ad, t) => '<tr><td style="font-weight:600">'+ad+'</td>'
-    + '<td class="num"><input type="number" step="0.01" min="0" value="'+t.tutar+'" style="width:120px;text-align:right" '
+    + '<td class="num"><input type="text" inputmode="decimal" value="'+(t.tutar ? esc(sayi(t.tutar)) : '')+'" placeholder="Tutar girin" style="width:140px;text-align:right" '
       + 'onchange="harcirahTarifeYaz(\''+kapsam+'\',\'tutar\',this.value)"></td>'
     + '<td>'+dovisSec(kapsam, t.dovis)+'</td></tr>';
   h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Harcırah tarifeleri</h3>'
