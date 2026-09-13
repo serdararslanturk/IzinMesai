@@ -3093,6 +3093,44 @@ function vMesailerim(){
     + '<button class="btn pri anabtn harcbtn" onclick="harcirahFormu()">+ Harcırah kaydı</button>'
     + '</div></div>';
 
+  // Yönetici tarafından reddedilen / revize edilen mesai ve harcırah kayıtları (sahibi görüp "Gördüm" ile kapatır)
+  const bildirimler = [];
+  if(p.id === S.aktifId){
+    for(const x of S.mesai){
+      if(x.pid !== p.id) continue;
+      if((x.revizeliOnay && !x.revizeGoruldu) || (x.durum === 'reddedildi' && !x.redGoruldu))
+        bildirimler.push({tip:'mesai', k:x, ret:(x.durum==='reddedildi'), zaman:(x.durum==='reddedildi'?x.redTarih:x.revizeTarih)||''});
+    }
+    for(const x of (S.harcirah || [])){
+      if(x.pid !== p.id) continue;
+      if((x.revizeliOnay && !x.revizeGoruldu) || (x.durum === 'reddedildi' && !x.redGoruldu))
+        bildirimler.push({tip:'harcirah', k:x, ret:(x.durum==='reddedildi'), zaman:(x.durum==='reddedildi'?x.redTarih:x.revizeTarih)||''});
+    }
+    bildirimler.sort((a,c) => String(c.zaman).localeCompare(String(a.zaman)));
+  }
+  if(bildirimler.length){
+    h += '<div class="card" style="margin-bottom:14px;border-color:var(--bekle-line,#E0CE9A)">'
+      + '<div class="hd"><h3>Yönetici işlemleri</h3><span class="sp hint">'+bildirimler.length+' bilgilendirme · gördükten sonra kapatın</span></div><div class="bd">'
+      + bildirimler.map(b => {
+          const k = b.k, ret = b.ret;
+          const ad = b.tip === 'mesai'
+            ? 'Fazla mesai · '+trTarih(k.tarih)+' · '+k.bas+'–'+k.bit+' · '+sayi(k.sure)+' saat'
+            : 'Harcırah · '+esc(k.ulke)+(k.sehir?' · '+esc(k.sehir):'')+' · '+trTarih(k.bas)+' – '+trTarih(k.bit);
+          const detayFn = b.tip === 'mesai' ? 'mesaiDetay' : 'harcirahDetay';
+          const gordumFn = b.tip === 'mesai' ? (ret?'mesaiRedGordum':'mesaiRevizeGordum') : (ret?'harcirahRedGordum':'harcirahRevizeGordum');
+          return '<div class="row" style="justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)">'
+            + '<div style="display:flex;align-items:center;gap:9px;min-width:0;flex-wrap:wrap">'
+              + '<span class="tag '+(ret?'r':'b')+'"><i class="dot"></i>'+(ret?'Reddedildi':'Revize edildi')+'</span>'
+              + '<span style="font-size:13px">'+ad+'</span>'
+            + '</div>'
+            + '<div style="white-space:nowrap;display:flex;gap:6px">'
+              + '<button class="btn sm" onclick="'+detayFn+'(\''+k.id+'\')">Detay</button>'
+              + '<button class="btn sm ok" onclick="'+gordumFn+'(\''+k.id+'\')">Gördüm</button>'
+            + '</div></div>';
+        }).join('')
+      + '</div></div>';
+  }
+
   const ho = harcirahOzet(p.id, S.yil);
   const mList = S.mesai.filter(x => x.pid === p.id && x.tarih.slice(0,4) === String(S.yil) && x.durum !== 'reddedildi' && x.durum !== 'iptal');
   const genelTutar = paraTopla({TL:m.toplamTutar}, ho.gecerli);
@@ -3133,14 +3171,18 @@ function kisiAylikVeri(pid, yil){
     if(BEKLEYEN.includes(m.durum)) a.bekVar = true;
   }
   for(const x of (S.harcirah || [])){
-    if(x.pid !== pid || x.bas.slice(0,4) !== String(yil)) continue;
+    if(x.pid !== pid) continue;
     if(x.durum === 'reddedildi' || x.durum === 'iptal') continue;
-    const a = aylar[Number(x.bas.slice(5,7)) - 1]; if(!a) continue;
-    a.harcAdet++; a.gun += x.gun || 0; a.harcirahlar.push(x);
     const dv = x.dovis || 'TL';
-    a.harcCur[dv] = (a.harcCur[dv] || 0) + x.tutar;
-    if(dv === 'TL') a.tl += x.tutar; else a.dovizler[dv] = (a.dovizler[dv] || 0) + x.tutar;
-    if(BEKLEYEN.includes(x.durum)) a.bekVar = true;
+    for(let ix = 0; ix < 12; ix++){
+      const pay = harcirahAyPayi(x, ix, yil);
+      if(!pay.gun) continue;                        // ay sınırını aşan görev yalnızca ilgili aya düşen kısmıyla sayılır
+      const a = aylar[ix];
+      a.harcAdet++; a.gun += pay.gun; a.harcirahlar.push({rec:x, pay});
+      a.harcCur[dv] = (a.harcCur[dv] || 0) + pay.tutar;
+      if(dv === 'TL') a.tl += pay.tutar; else a.dovizler[dv] = (a.dovizler[dv] || 0) + pay.tutar;
+      if(BEKLEYEN.includes(x.durum)) a.bekVar = true;
+    }
   }
   return aylar;
 }
@@ -3175,8 +3217,8 @@ function kisiAylikGorunum(pid){
   return h + '</div></div>';
 }
 function kisiAyDetay(pid, a){
-  const mTut = a.mesailer.reduce((s,m) => s + (m.karsilik === 'ucret' ? mesaiTutar(m) : 0), 0);
-  const hGecerli = {}; a.harcirahlar.forEach(x => { hGecerli[x.dovis] = (hGecerli[x.dovis] || 0) + x.tutar; });
+  const mTut = a.mesaiTl;                 // aya düşen mesai tutarı
+  const hGecerli = a.harcCur;             // aya düşen harcırah (döviz bazında)
   const genel = paraTopla({TL:mTut}, hGecerli);
 
   let h = '<div class="msdd"><div class="msdd-bas"><b>'+esc(AY[a.ix])+' '+S.yil+'</b>'
@@ -3196,7 +3238,20 @@ function kisiAyDetay(pid, a){
   h += '</div><div class="bd flush">'
     + '<div style="padding:9px 14px 4px;font-weight:700;font-size:11.5px;letter-spacing:.04em;color:var(--ink3)">HARCIRAH</div>';
   if(a.harcirahlar.length) h += '<table class="ptbl" style="width:100%"><thead><tr><th>Ülke / Şehir</th><th>Tarih aralığı</th><th class="num">Gün</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
-    + a.harcirahlar.sort((x,y) => y.bas.localeCompare(x.bas)).map(x => harcirahSatiri(x, false)).join('') + '</tbody></table>';
+    + a.harcirahlar.slice().sort((p,q) => q.pay.bas.localeCompare(p.pay.bas)).map(({rec, pay}) => {
+        const sim = DOVIZ_SIM[rec.dovis] || rec.dovis || '';
+        let ops = '';
+        if(rec.pid === S.aktifId && BEKLEYEN.includes(rec.durum)) ops += '<button class="btn sm" onclick="harcirahRevizeAc(\''+rec.id+'\')">Revize</button> ';
+        ops += '<button class="btn sm" onclick="harcirahDetay(\''+rec.id+'\')">Detay</button>';
+        return '<tr class="kart"><td data-e="Ülke / Şehir"><div style="font-weight:600">'+esc(rec.ulke)+'</div>'
+          + '<div class="hint">'+esc(rec.sehir||'')+(rec.kapsam==='yurtdisi'?' · yurtdışı':'')+'</div></td>'
+          + '<td data-e="Tarih aralığı" class="mono" style="font-size:12.5px;white-space:nowrap">'+trTarih(pay.bas)+' – '+trTarih(pay.bit)
+            + (pay.kismi ? ' <span class="pill kismi">kısmi</span>' : '')+'</td>'
+          + '<td data-e="Gün" class="num" style="font-weight:600">'+sayi(pay.gun)+'</td>'
+          + '<td data-e="Tutar" class="num mono" style="font-size:12.5px">'+sayi(pay.tutar)+' '+sim+'</td>'
+          + '<td data-e="Durum">'+durumTag(rec.durum)+'</td>'
+          + '<td class="str">'+ops+'</td></tr>';
+      }).join('') + '</tbody></table>';
   else h += '<div class="hint" style="padding:0 14px 12px">Bu ay harcırah kaydı yok.</div>';
   return h + '</div></div>';
 }
@@ -4010,6 +4065,15 @@ const TR_ILLER = ['Adana','Adıyaman','Afyonkarahisar','Ağrı','Aksaray','Amasy
 
 function harcirahKapsam(ulke){ return ulke === 'Türkiye' ? 'yurtici' : 'yurtdisi'; }
 function harcirahGun(bas, bit){ return Math.round((d(bit) - d(bas)) / 86400000) + 1; }   // takvim günü, dahil
+/* Harcırahın belirli bir aya (yil, ayIx) düşen takvim-günü payı ve tutarı — ay sınırını aşan görevler bölünür */
+function harcirahAyPayi(x, ayIx, yil){
+  const aBas = iso(new Date(yil, ayIx, 1)), aBit = iso(new Date(yil, ayIx + 1, 0));
+  if(x.bit < aBas || x.bas > aBit) return {gun:0, tutar:0, bas:'', bit:'', kismi:false};
+  const b = x.bas < aBas ? aBas : x.bas;
+  const s = x.bit > aBit ? aBit : x.bit;
+  const gun = harcirahGun(b, s);
+  return {gun, tutar: gun * (x.gunluk || 0), bas:b, bit:s, kismi: (b !== x.bas || s !== x.bit)};
+}
 function harcirahHesap(ulke, bas, bit){
   const kapsam = harcirahKapsam(ulke);
   const t = harcirahTarife()[kapsam];
@@ -4030,15 +4094,18 @@ function harcirahToplamMetni(list){
   if(!n) return '';
   return n + ' kayıt · ' + Object.entries(g).map(([dv,v]) => sayi(v) + ' ' + (DOVIZ_SIM[dv] || dv)).join(' · ');
 }
-/* Kişinin yıllık harcırah özeti (döviz bazında) */
+/* Kişinin yıllık harcırah özeti — yalnızca o yıla düşen takvim günü payları (ay sınırını aşan görevler bölünür) */
 function harcirahOzet(pid, yil){
   const o = {adet:0, bekAdet:0, gun:0, bekGun:0, gecerli:{}, bekleyen:{}};
   for(const x of (S.harcirah || [])){
-    if(x.pid !== pid || x.bas.slice(0,4) !== String(yil)) continue;
+    if(x.pid !== pid) continue;
     if(x.durum === 'reddedildi' || x.durum === 'iptal') continue;
-    o.adet++; o.gun += x.gun || 0;
-    o.gecerli[x.dovis] = (o.gecerli[x.dovis] || 0) + x.tutar;
-    if(BEKLEYEN.includes(x.durum)){ o.bekAdet++; o.bekGun += x.gun || 0; o.bekleyen[x.dovis] = (o.bekleyen[x.dovis] || 0) + x.tutar; }
+    let gun = 0, tutar = 0;
+    for(let ix = 0; ix < 12; ix++){ const pay = harcirahAyPayi(x, ix, yil); gun += pay.gun; tutar += pay.tutar; }
+    if(!gun) continue;                              // bu yıla düşmüyor
+    o.adet++; o.gun += gun;
+    o.gecerli[x.dovis] = (o.gecerli[x.dovis] || 0) + tutar;
+    if(BEKLEYEN.includes(x.durum)){ o.bekAdet++; o.bekGun += gun; o.bekleyen[x.dovis] = (o.bekleyen[x.dovis] || 0) + tutar; }
   }
   return o;
 }
@@ -4144,7 +4211,7 @@ function harcirahFormu(pid){
     + secilebilir.map(x => '<option value="'+x.id+'"'+(x.id===hedef?' selected':'')+'>'+esc(x.ad+' '+x.soyad)+'</option>').join('')+'</select></div>'
   + '<div class="fld ulkefld"><label class="lb">Ülke</label>'
     + '<input type="text" id="h_ulke" value="Türkiye" autocomplete="off" placeholder="Ülke arayın…" '
-      + 'oninput="harcirahUlkeAra(this.value)" onfocus="harcirahUlkeAra(this.value)" '
+      + 'oninput="harcirahUlkeAra(this.value)" onfocus="this.select();harcirahUlkeAra(this.value)" '
       + 'onblur="setTimeout(harcirahUlkeListeKapat,150)" onchange="harcirahUlkeDegis()">'
     + '<div id="h_ulkeliste" class="ulkeliste" hidden></div></div>'
   + '<div class="fld" id="h_sehiralan">'+harcirahSehirAlani('Türkiye')+'</div>'
@@ -4301,6 +4368,7 @@ function harcirahKarar(id, onay){
   x.gecmis.push({rol:'Yönetici', kisi:adSoyad(S.aktifId), karar:onay?'Onaylandı':'Reddedildi', tarih:bugun(), not:(S.redNotu || '')});
   S.redNotu = '';
   x.durum = onay ? 'onaylandi' : 'reddedildi';
+  if(!onay){ x.redGoruldu = false; x.redEden = adSoyad(S.aktifId); x.redTarih = bugun(); }
   kaydet(); modalKapat(); ciz();
   bildir(adSoyad(x.pid)+' · harcırah '+(onay?'onaylandı.':'reddedildi.'));
 }
@@ -4338,7 +4406,6 @@ function harcirahDetay(id){
   + '<div class="sep"></div><div class="lb">Onay geçmişi</div><div style="margin-top:6px">'+gecmisHtml(x.gecmis)+'</div>'
   + '</div><div class="mf">'
   + ((x.pid===S.aktifId && BEKLEYEN.includes(x.durum)) ? '<button class="btn" style="margin-right:auto" onclick="harcirahIptal(\''+id+'\')">Geri çek</button>' : '')
-  + ((ikMi() || (x.pid===S.aktifId && x.durum!=='onaylandi')) ? '<button class="btn no" onclick="harcirahSil(\''+id+'\')">Sil</button>' : '')
   + '<button class="btn" onclick="modalKapat()">Kapat</button>'
   + (kararVerebilir ? '<button class="btn no" onclick="harcirahRedAc(\''+id+'\')">Reddet</button><button class="btn ok" onclick="harcirahKarar(\''+id+'\',true)">Onayla</button>' : '')
   + '</div>');
@@ -4375,7 +4442,7 @@ function harcirahRevizeAc(id){
   + '<div class="grid g2 mt">'
   + '<div class="fld ulkefld"><label class="lb">Ülke</label>'
     + '<input type="text" id="h_ulke" value="'+esc(x.ulke)+'" autocomplete="off" placeholder="Ülke arayın…" '
-      + 'oninput="harcirahUlkeAra(this.value)" onfocus="harcirahUlkeAra(this.value)" onblur="setTimeout(harcirahUlkeListeKapat,150)" onchange="harcirahUlkeDegis()">'
+      + 'oninput="harcirahUlkeAra(this.value)" onfocus="this.select();harcirahUlkeAra(this.value)" onblur="setTimeout(harcirahUlkeListeKapat,150)" onchange="harcirahUlkeDegis()">'
     + '<div id="h_ulkeliste" class="ulkeliste" hidden></div></div>'
   + '<div class="fld" id="h_sehiralan">'+harcirahSehirAlani(x.ulke, x.sehir)+'</div>'
   + '<div class="fld"><label class="lb">Görev tarihleri</label>'
@@ -4418,6 +4485,7 @@ function harcirahRevizeKaydet(id){
   x.ulke = ulke; x.sehir = sehir; x.kapsam = hp.kapsam; x.bas = bas; x.bit = bit;
   x.gun = hp.gun; x.gunluk = hp.gunluk; x.dovis = hp.dovis; x.tutar = hp.tutar;
   x.durum = 'yonetici_bekliyor';
+  if(x.pid !== S.aktifId){ x.revizeliOnay = true; x.revizeGoruldu = false; x.revizeEden = adSoyad(S.aktifId); x.revizeTarih = bugun(); }
   S.harcirahRevizeId = null;
   kaydet(); modalKapat(); ciz();
   bildir('Harcırah revize edildi, yeniden onaya gönderildi.');
@@ -4951,6 +5019,11 @@ function izinRedGordum(id){
   kaydet();
   ciz();
 }
+/* Mesai / harcırah: sahibi ret veya revize bilgilendirmesini gördü */
+function mesaiRedGordum(id){ const m = S.mesai.find(x=>x.id===id); if(m && m.pid===S.aktifId){ m.redGoruldu = true; kaydet(); ciz(); } }
+function mesaiRevizeGordum(id){ const m = S.mesai.find(x=>x.id===id); if(m && m.pid===S.aktifId){ m.revizeGoruldu = true; kaydet(); ciz(); } }
+function harcirahRedGordum(id){ const x = (S.harcirah||[]).find(h=>h.id===id); if(x && x.pid===S.aktifId){ x.redGoruldu = true; kaydet(); ciz(); } }
+function harcirahRevizeGordum(id){ const x = (S.harcirah||[]).find(h=>h.id===id); if(x && x.pid===S.aktifId){ x.revizeGoruldu = true; kaydet(); ciz(); } }
 
 function mesaiDetay(id){
   const m = S.mesai.find(x=>x.id===id); if(!m) return;
@@ -4980,8 +5053,7 @@ function mesaiDetay(id){
   + '<div class="sep"></div><div class="lb">Onay geçmişi</div><div style="margin-top:6px">'+gecmisHtml(m.gecmis)+'</div>'
   + (kararVerebilir ? '<div class="fld mt"><label class="lb">Karar notu (isteğe bağlı)</label><input type="text" id="km_not"></div>' : '')
   + '</div><div class="mf">'
-  + (mesaiSilinebilir(m) ? '<button class="btn no" style="margin-right:auto" onclick="mesaiSil(\''+id+'\')">Kaydı sil</button>' : '')
-  + ((m.durum==='yonetici_bekliyor' && m.pid===S.aktifId) ? '<button class="btn" onclick="mesaiIptal(\''+id+'\')">Geri çek</button>' : '')
+  + ((m.durum==='yonetici_bekliyor' && m.pid===S.aktifId) ? '<button class="btn" style="margin-right:auto" onclick="mesaiIptal(\''+id+'\')">Geri çek</button>' : '')
   + (mesaiIptalTalebi(m) ? '<button class="btn no" onclick="mesaiIptal(\''+id+'\')">İptal talebi</button>' : '')
   + (mesaiRevizeEdilebilir(m) ? '<button class="btn" onclick="mesaiRevizeAc(\''+id+'\')">Revize et</button>' : '')
   + '<button class="btn" onclick="modalKapat()">Kapat</button>'
@@ -4998,6 +5070,7 @@ function mesaiKarar(id, onay){
   const rol = iptalTalebi ? 'İptal onayı' : 'Yönetici';
   m.gecmis.push({rol, kisi:adSoyad(S.aktifId), karar:onay?'Onaylandı':'Reddedildi', tarih:bugun(), not:notu});
   m.durum = iptalTalebi ? (onay ? 'iptal' : 'onaylandi') : (onay ? 'onaylandi' : 'reddedildi');
+  if(!iptalTalebi && !onay){ m.redGoruldu = false; m.redEden = adSoyad(S.aktifId); m.redTarih = bugun(); }
   const kisi = S.kayitKisi;
   kaydet();
   if(kisi){ S.kayitKisi = kisi; kisiKayitlariCiz(); } else modalKapat();
@@ -5087,6 +5160,7 @@ function mesaiRevizeKaydet(id){
     not: eski + '  →  ' + yeni + ' · ' + notu});
   m.tarih = tarih; m.bas = bas; m.bit = bit; m.sure = sure; m.tur = tur; m.karsilik = kar;
   m.durum = 'yonetici_bekliyor';
+  if(m.pid !== S.aktifId){ m.revizeliOnay = true; m.revizeGoruldu = false; m.revizeEden = adSoyad(S.aktifId); m.revizeTarih = bugun(); }
 
   const kisi = S.revizeKisi;
   S.kayitKisi = kisi || null; S.revizeKisi = null;
