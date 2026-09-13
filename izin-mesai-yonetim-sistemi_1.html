@@ -3078,27 +3078,42 @@ function vMesailerim(){
     + '<button class="btn pri anabtn harcbtn" onclick="harcirahFormu()">+ Harcırah kaydı</button>'
     + '</div></div>';
 
-  const mesaiIkili = '<div class="stat raporlu bolku tiklanir" onclick="mesaiDokum(\''+p.id+'\')">'
-    + '<div class="yarilar">'
-      + '<div class="yari"><div class="k">Toplam mesai</div>'
-        + '<div class="v">'+sayi(m.toplamSaat)+'<small>saat</small></div>'
-        + '<div class="s">'+(m.bekleyen ? sayi(m.bekleyen)+' saat onay bekliyor' : 'Fiili çalışma')+'</div></div>'
-      + '<div class="yari"><div class="k">Ücrete esas</div>'
-        + '<div class="v">'+sayi(m.toplamUcret)+'<small>saat</small></div>'
-        + '<div class="s">Zam çarpanı uygulanmış</div></div>'
-    + '</div>'
-    + '<div class="statok"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
-      + '<rect x="1.6" y="2.4" width="12.8" height="11.2" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/>'
-      + '<path d="M4.4 6.2h7.2M4.4 9h7.2M4.4 11.6h4.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>'
-      + '</svg><span>Raporu aç</span><i>›</i></div></div>';
+  const ho = harcirahOzet(p.id, S.yil);
+  const mList = S.mesai.filter(x => x.pid === p.id && x.tarih.slice(0,4) === String(S.yil) && x.durum !== 'reddedildi' && x.durum !== 'iptal');
+  const mBekSaat = mList.filter(x => BEKLEYEN.includes(x.durum)).reduce((a,x) => a + x.sure, 0);
+  const genelTutar = paraTopla({TL:m.toplamTutar}, ho.gecerli);
+  const genelBek   = paraTopla({TL:m.bekleyenTutar}, ho.bekleyen);
+  const mesaiMiktar = (m.toplamSaat ? sayi(m.toplamSaat)+' saat' : '—')
+    + (m.toplamUcret ? '<div class="hint" style="font-size:11px">ücrete esas '+sayi(m.toplamUcret)+' saat</div>' : '');
+  const mBekMetin = (m.bekleyenTutar || mBekSaat)
+    ? sayi(m.bekleyenTutar)+' ₺'+(mBekSaat ? '<div class="hint" style="font-size:11px">'+sayi(mBekSaat)+' saat</div>' : '') : '—';
+  const genelMiktar = [m.toplamSaat ? sayi(m.toplamSaat)+' saat' : '', ho.gun ? sayi(ho.gun)+' gün' : ''].filter(Boolean).join(' · ') || '—';
 
-  h += '<div class="grid g3" style="margin-bottom:14px">'
-    + mesaiIkili
-    + stat('Mesai ücreti', sayi(m.toplamTutar), '₺',
-        m.bekleyenTutar ? sayi(m.bekleyenTutar)+' ₺ onay bekliyor' : 'Ücret karşılığı seçilenler',
-        '', "mesaiDokum('"+p.id+"')", 'raporlu')
-    + stat('Kalan kota', sayi(Math.max(0,m.kalanKota)), 'saat', 'Yıllık '+S.ayar.yillikMesaiSiniri+' saat sınırı')
-    + '</div>';
+  h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Özet · '+S.yil+'</h3>'
+    + '<div class="sp hint">Mesai ve harcırah toplamları</div></div>'
+    + '<div class="bd flush"><table class="ptbl" style="width:100%"><thead><tr>'
+    + '<th>Tür</th><th class="num">Kayıt</th><th class="num">Miktar</th><th class="num">Tutar</th><th class="num">Onay bekleyen</th><th class="str"></th></tr></thead><tbody>'
+    + '<tr class="kart"><td data-e="Tür"><span class="ddot" style="background:#E08E6F"></span><b>Fazla mesai</b></td>'
+      + '<td data-e="Kayıt" class="num">'+mList.length+'</td>'
+      + '<td data-e="Miktar" class="num">'+mesaiMiktar+'</td>'
+      + '<td data-e="Tutar" class="num mono">'+sayi(m.toplamTutar)+' ₺</td>'
+      + '<td data-e="Onay bekleyen" class="num mono">'+mBekMetin+'</td>'
+      + '<td class="str"><button class="btn sm" onclick="mesaiDokum(\''+p.id+'\')">Raporu aç</button></td></tr>'
+    + '<tr class="kart"><td data-e="Tür"><span class="ddot" style="background:#3F7CB8"></span><b>Harcırah</b></td>'
+      + '<td data-e="Kayıt" class="num">'+ho.adet+'</td>'
+      + '<td data-e="Miktar" class="num">'+(ho.gun ? sayi(ho.gun)+' gün' : '—')+'</td>'
+      + '<td data-e="Tutar" class="num mono">'+paraMetni(ho.gecerli)+'</td>'
+      + '<td data-e="Onay bekleyen" class="num mono">'+paraMetni(ho.bekleyen)+'</td>'
+      + '<td class="str"></td></tr>'
+    + '<tr class="dip"><td data-e="Tür"><b>Genel toplam</b></td>'
+      + '<td class="num"><b>'+(mList.length + ho.adet)+'</b></td>'
+      + '<td class="num">'+genelMiktar+'</td>'
+      + '<td class="num mono"><b>'+paraMetni(genelTutar)+'</b></td>'
+      + '<td class="num mono"><b>'+paraMetni(genelBek)+'</b></td>'
+      + '<td class="str"></td></tr>'
+    + '</tbody></table></div>'
+    + '<div class="bd" style="border-top:1px solid var(--line2)"><span class="hint">Yıllık mesai kotası: '
+      + '<b style="color:var(--ink)">'+sayi(m.toplamSaat)+' / '+S.ayar.yillikMesaiSiniri+' saat</b> · kalan '+sayi(Math.max(0,m.kalanKota))+' saat</span></div></div>';
 
   if(m.kalanKota < 0) h += '<div class="card" style="margin-bottom:14px;border-color:var(--red-line);background:var(--red-soft)"><div class="bd"><b>Yıllık fazla çalışma sınırı aşıldı.</b> <span class="hint">'+sayi(-m.kalanKota)+' saat sınır üstünde. İK ile görüşün.</span></div></div>';
 
@@ -3963,6 +3978,24 @@ function harcirahToplamMetni(list){
   if(!n) return '';
   return n + ' kayıt · ' + Object.entries(g).map(([dv,v]) => sayi(v) + ' ' + (DOVIZ_SIM[dv] || dv)).join(' · ');
 }
+/* Kişinin yıllık harcırah özeti (döviz bazında) */
+function harcirahOzet(pid, yil){
+  const o = {adet:0, bekAdet:0, gun:0, bekGun:0, gecerli:{}, bekleyen:{}};
+  for(const x of (S.harcirah || [])){
+    if(x.pid !== pid || x.bas.slice(0,4) !== String(yil)) continue;
+    if(x.durum === 'reddedildi' || x.durum === 'iptal') continue;
+    o.adet++; o.gun += x.gun || 0;
+    o.gecerli[x.dovis] = (o.gecerli[x.dovis] || 0) + x.tutar;
+    if(BEKLEYEN.includes(x.durum)){ o.bekAdet++; o.bekGun += x.gun || 0; o.bekleyen[x.dovis] = (o.bekleyen[x.dovis] || 0) + x.tutar; }
+  }
+  return o;
+}
+/* Döviz→tutar nesnesini "1.500 ₺ · 270 €" biçiminde yaz (sıfırları atla) */
+function paraMetni(obj){
+  const e = Object.entries(obj).filter(([k,v]) => v);
+  return e.length ? e.map(([k,v]) => sayi(v) + ' ' + (DOVIZ_SIM[k] || k)).join(' · ') : '—';
+}
+function paraTopla(a, b){ const r = Object.assign({}, a); for(const k in b) r[k] = (r[k] || 0) + b[k]; return r; }
 function harcirahKararVerebilir(x){
   if(!x) return false;
   if(!BEKLEYEN.includes(x.durum)) return false;
@@ -7121,9 +7154,10 @@ function kadroListe(){
 /* Harcırah günlük tarifeleri (yurtiçi/yurtdışı, TL veya EUR) */
 function harcirahTarife(){
   const h = (S.ayar && S.ayar.harcirah) || {};
+  const al = (o, d) => (o && o.tutar != null && o.tutar !== '') ? Number(o.tutar) : d;   // tanımsızsa varsayılan, 0 ise 0
   return {
-    yurtici:  {tutar: Number(h.yurtici && h.yurtici.tutar)  || 0, dovis: (h.yurtici && h.yurtici.dovis)  || 'TL'},
-    yurtdisi: {tutar: Number(h.yurtdisi && h.yurtdisi.tutar) || 0, dovis: (h.yurtdisi && h.yurtdisi.dovis) || 'EUR'}
+    yurtici:  {tutar: al(h.yurtici, 1000), dovis: (h.yurtici && h.yurtici.dovis)  || 'TL'},
+    yurtdisi: {tutar: al(h.yurtdisi, 100), dovis: (h.yurtdisi && h.yurtdisi.dovis) || 'EUR'}
   };
 }
 /* "1.234,56" / "1234.56" / "1234" → sayı; boş/geçersiz → 0 */
