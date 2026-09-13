@@ -3080,73 +3080,97 @@ function vMesailerim(){
 
   const ho = harcirahOzet(p.id, S.yil);
   const mList = S.mesai.filter(x => x.pid === p.id && x.tarih.slice(0,4) === String(S.yil) && x.durum !== 'reddedildi' && x.durum !== 'iptal');
-  const mBekSaat = mList.filter(x => BEKLEYEN.includes(x.durum)).reduce((a,x) => a + x.sure, 0);
   const genelTutar = paraTopla({TL:m.toplamTutar}, ho.gecerli);
   const genelBek   = paraTopla({TL:m.bekleyenTutar}, ho.bekleyen);
-  const mesaiMiktar = (m.toplamSaat ? sayi(m.toplamSaat)+' saat' : '—')
-    + (m.toplamUcret ? '<div class="hint" style="font-size:11px">ücrete esas '+sayi(m.toplamUcret)+' saat</div>' : '');
-  const mBekMetin = (m.bekleyenTutar || mBekSaat)
-    ? sayi(m.bekleyenTutar)+' ₺'+(mBekSaat ? '<div class="hint" style="font-size:11px">'+sayi(mBekSaat)+' saat</div>' : '') : '—';
-  const genelMiktar = [m.toplamSaat ? sayi(m.toplamSaat)+' saat' : '', ho.gun ? sayi(ho.gun)+' gün' : ''].filter(Boolean).join(' · ') || '—';
+  const toplamKayit = mList.length + ho.adet;
+  const miktarMetni = [m.toplamSaat ? sayi(m.toplamSaat)+' saat' : '', ho.gun ? sayi(ho.gun)+' gün' : ''].filter(Boolean).join(' · ');
 
-  h += '<div class="card" style="margin-bottom:14px"><div class="hd"><h3>Özet · '+S.yil+'</h3>'
-    + '<div class="sp hint">Mesai ve harcırah toplamları</div></div>'
-    + '<div class="bd flush"><table class="ptbl" style="width:100%"><thead><tr>'
-    + '<th>Tür</th><th class="num">Kayıt</th><th class="num">Miktar</th><th class="num">Tutar</th><th class="num">Onay bekleyen</th><th class="str"></th></tr></thead><tbody>'
-    + '<tr class="kart"><td data-e="Tür"><span class="ddot" style="background:#E08E6F"></span><b>Fazla mesai</b></td>'
-      + '<td data-e="Kayıt" class="num">'+mList.length+'</td>'
-      + '<td data-e="Miktar" class="num">'+mesaiMiktar+'</td>'
-      + '<td data-e="Tutar" class="num mono">'+sayi(m.toplamTutar)+' ₺</td>'
-      + '<td data-e="Onay bekleyen" class="num mono">'+mBekMetin+'</td>'
-      + '<td class="str"><button class="btn sm" onclick="mesaiDokum(\''+p.id+'\')">Raporu aç</button></td></tr>'
-    + '<tr class="kart"><td data-e="Tür"><span class="ddot" style="background:#3F7CB8"></span><b>Harcırah</b></td>'
-      + '<td data-e="Kayıt" class="num">'+ho.adet+'</td>'
-      + '<td data-e="Miktar" class="num">'+(ho.gun ? sayi(ho.gun)+' gün' : '—')+'</td>'
-      + '<td data-e="Tutar" class="num mono">'+paraMetni(ho.gecerli)+'</td>'
-      + '<td data-e="Onay bekleyen" class="num mono">'+paraMetni(ho.bekleyen)+'</td>'
-      + '<td class="str"></td></tr>'
-    + '<tr class="dip"><td data-e="Tür"><b>Genel toplam</b></td>'
-      + '<td class="num"><b>'+(mList.length + ho.adet)+'</b></td>'
-      + '<td class="num">'+genelMiktar+'</td>'
-      + '<td class="num mono"><b>'+paraMetni(genelTutar)+'</b></td>'
-      + '<td class="num mono"><b>'+paraMetni(genelBek)+'</b></td>'
-      + '<td class="str"></td></tr>'
-    + '</tbody></table></div>'
-    + '<div class="bd" style="border-top:1px solid var(--line2)"><span class="hint">Yıllık mesai kotası: '
-      + '<b style="color:var(--ink)">'+sayi(m.toplamSaat)+' / '+S.ayar.yillikMesaiSiniri+' saat</b> · kalan '+sayi(Math.max(0,m.kalanKota))+' saat</span></div></div>';
+  h += '<div class="card toplamkutu" style="margin-bottom:14px"><div class="bd">'
+    + '<div class="row" style="justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">'
+      + '<div>'
+        + '<div class="k" style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:600">Toplam · '+S.yil+'</div>'
+        + '<div style="font-family:\'Archivo\';font-weight:700;font-size:30px;letter-spacing:-.02em;line-height:1.05;margin-top:6px">'+paraMetni(genelTutar)+'</div>'
+        + '<div class="hint" style="margin-top:6px">'+([toplamKayit+' kayıt', miktarMetni].filter(Boolean).join(' · '))+'</div>'
+      + '</div>'
+      + '<div style="text-align:right;display:flex;flex-direction:column;gap:6px">'
+        + (paraMetni(genelBek) !== '—' ? '<div class="hint">Onay bekleyen · <b style="color:var(--bekle-ink,#B0821E)">'+paraMetni(genelBek)+'</b></div>' : '')
+        + '<div class="hint">Kalan mesai kotası · <b style="color:var(--ink)">'+sayi(Math.max(0,m.kalanKota))+' / '+S.ayar.yillikMesaiSiniri+' saat</b></div>'
+      + '</div>'
+    + '</div></div></div>';
 
   if(m.kalanKota < 0) h += '<div class="card" style="margin-bottom:14px;border-color:var(--red-line);background:var(--red-soft)"><div class="bd"><b>Yıllık fazla çalışma sınırı aşıldı.</b> <span class="hint">'+sayi(-m.kalanKota)+' saat sınır üstünde. İK ile görüşün.</span></div></div>';
 
-  const bekleyenler = S.mesai.filter(x => x.pid === p.id && x.tarih.slice(0,4) === String(S.yil) && BEKLEYEN.includes(x.durum))
-                             .sort((a,c) => c.tarih.localeCompare(a.tarih));
-  h += '<div class="card"><div class="hd"><h3>Onay bekleyen mesailerim</h3>'
-    + (bekleyenler.length
-        ? '<span class="bekrozet">'+bekleyenler.length+' kayıt · '+sayi(bekleyenler.reduce((a,x)=>a+x.sure,0))+' saat</span>'
-        : '')
-    + '<div class="sp hint" style="font-size:11.5px">Tüm kayıtlar için üstteki “Toplam mesai” veya “Mesai ücreti” kartına tıklayın</div></div>'
-    + '<div class="bd flush"><table class="ptbl" style="width:100%"><thead><tr>'
-    + '<th>Tarih</th><th>Saat</th><th>Hesaplama</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
-    + (bekleyenler.length
-        ? bekleyenler.map(x => mesaiSatiri(x,false)).join('')
-        : '<tr><td colspan="6"><div class="empty"><div class="e1">Onay bekleyen mesai yok</div>Tüm kayıtlarını görmek için üstteki kartlara tıklayın.</div></td></tr>')
-    + '</tbody></table></div>';
-  h += '</div>';
-
-  // ---- Harcırahlarım ----
-  const hrcList = (S.harcirah || []).filter(x => x.pid === p.id && x.bas.slice(0,4) === String(S.yil))
-                                    .sort((a,c) => c.bas.localeCompare(a.bas));
-  const hrcTop = harcirahToplamMetni(hrcList);
-  h += '<div class="card" style="margin-top:14px"><div class="hd"><h3>Harcırahlarım</h3>'
-    + (hrcTop ? '<span class="bekrozet">'+hrcTop+'</span>' : '')
-    + '<div class="sp hint" style="font-size:11.5px">Görev harcırahları</div></div>'
-    + '<div class="bd flush"><table class="ptbl" style="width:100%"><thead><tr>'
-    + '<th>Ülke / Şehir</th><th>Tarih aralığı</th><th class="num">Gün</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
-    + (hrcList.length
-        ? hrcList.map(x => harcirahSatiri(x, false)).join('')
-        : '<tr><td colspan="6"><div class="empty"><div class="e1">Harcırah kaydı yok</div>Görev harcırahı için “+ Harcırah kaydı”na tıklayın.</div></td></tr>')
-    + '</tbody></table></div></div>';
-
+  h += kisiAylikGorunum(p.id);
   return h;
+}
+
+/* Kişinin kendi ekranı için aylık mesai+harcırah kutuları; aya tıklayınca o ayın detay tabloları */
+function kisiAyAc(ix){ S.kisiAcikAy = (S.kisiAcikAy === ix) ? null : ix; ciz(); }
+function kisiAylikVeri(pid, yil){
+  const aylar = Array.from({length:12}, (_,ix) => ({ix, tl:0, dovizler:{}, mesaiAdet:0, harcAdet:0, bekVar:false, saat:0, gun:0, mesailer:[], harcirahlar:[]}));
+  for(const m of S.mesai){
+    if(m.pid !== pid || m.tarih.slice(0,4) !== String(yil)) continue;
+    if(m.durum === 'reddedildi' || m.durum === 'iptal') continue;
+    const a = aylar[Number(m.tarih.slice(5,7)) - 1]; if(!a) continue;
+    a.mesaiAdet++; a.saat += m.sure; a.mesailer.push(m);
+    if(m.karsilik === 'ucret') a.tl += mesaiTutar(m);
+    if(BEKLEYEN.includes(m.durum)) a.bekVar = true;
+  }
+  for(const x of (S.harcirah || [])){
+    if(x.pid !== pid || x.bas.slice(0,4) !== String(yil)) continue;
+    if(x.durum === 'reddedildi' || x.durum === 'iptal') continue;
+    const a = aylar[Number(x.bas.slice(5,7)) - 1]; if(!a) continue;
+    a.harcAdet++; a.gun += x.gun || 0; a.harcirahlar.push(x);
+    if((x.dovis || 'TL') === 'TL') a.tl += x.tutar; else a.dovizler[x.dovis] = (a.dovizler[x.dovis] || 0) + x.tutar;
+    if(BEKLEYEN.includes(x.durum)) a.bekVar = true;
+  }
+  return aylar;
+}
+function kisiAylikGorunum(pid){
+  const aylar = kisiAylikVeri(pid, S.yil);
+  const yilTl = aylar.reduce((a,x) => a + x.tl, 0);
+  const yilDoviz = {}; aylar.forEach(a => { for(const k in a.dovizler) yilDoviz[k] = (yilDoviz[k] || 0) + a.dovizler[k]; });
+  const yilSaat = aylar.reduce((a,x) => a + x.saat, 0);
+  const yilGun  = aylar.reduce((a,x) => a + x.gun, 0);
+  const acik = (typeof S.kisiAcikAy === 'number' && aylar[S.kisiAcikAy] && (aylar[S.kisiAcikAy].mesaiAdet + aylar[S.kisiAcikAy].harcAdet)) ? S.kisiAcikAy : null;
+
+  let h = '<div class="card"><div class="hd"><h3>Aylık</h3>'
+    + '<div class="sp hint" style="font-size:11.5px">Bir aya tıklayın · mesai ve harcırah detayı açılır</div></div><div class="bd">';
+
+  h += '<div class="aygrid2">';
+  for(const a of aylar){
+    const bos = (a.mesaiAdet + a.harcAdet) === 0;
+    const dovizEk = paraMetni(a.dovizler);
+    h += '<button type="button" class="aykutu'+(a.ix===acik?' secili':'')+(bos?' bos':'')+'"'+(bos?' disabled':' onclick="kisiAyAc('+a.ix+')"')+'>'
+      + '<div class="ak-ay">'+esc(AY[a.ix])+'</div>'
+      + ((a.tl || dovizEk === '—')
+          ? '<div class="ak-tutar">'+sayi(a.tl)+' <small>₺</small></div>'
+            + (dovizEk !== '—' ? '<div class="ak-alt" style="font-weight:700;color:var(--ink2)">+ '+dovizEk+'</div>' : '')
+          : '<div class="ak-tutar" style="font-size:17px">'+esc(dovizEk)+'</div>')
+      + '<div class="ak-alt">'+(bos ? 'kayıt yok' : [a.mesaiAdet?a.mesaiAdet+' mesai':'', a.harcAdet?a.harcAdet+' harcırah':''].filter(Boolean).join(' · '))+'</div>'
+      + (a.bekVar ? '<div class="ak-bek">onay bekleyen var</div>' : '')
+      + '</button>';
+  }
+  h += '</div>';
+  h += (acik !== null) ? kisiAyDetay(pid, aylar[acik])
+    : '<div class="hint" style="margin-top:14px">Bir ay kutusuna tıklayın → o ayın mesai ve harcırah detayları açılır.</div>';
+  return h + '</div></div>';
+}
+function kisiAyDetay(pid, a){
+  let h = '<div class="msdd"><div class="msdd-bas"><b>'+esc(AY[a.ix])+' '+S.yil+'</b>'
+    + '<span class="hint" style="font-weight:400">'+[a.mesaiAdet?a.mesaiAdet+' mesai':'', a.harcAdet?a.harcAdet+' harcırah':''].filter(Boolean).join(' · ')+'</span>'
+    + '<div class="sp"><button class="btn sm" onclick="kisiAyAc('+a.ix+')">Kapat</button></div></div>';
+  h += '<div class="bd flush" style="border-bottom:1px solid var(--line)">'
+    + '<div style="padding:9px 14px 4px;font-weight:700;font-size:11.5px;letter-spacing:.04em;color:var(--ink3)">FAZLA MESAİ</div>';
+  if(a.mesailer.length) h += '<table class="ptbl" style="width:100%"><thead><tr><th>Tarih</th><th>Saat</th><th>Hesaplama</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
+    + a.mesailer.sort((x,y) => y.tarih.localeCompare(x.tarih)).map(x => mesaiSatiri(x, false)).join('') + '</tbody></table>';
+  else h += '<div class="hint" style="padding:0 14px 12px">Bu ay mesai kaydı yok.</div>';
+  h += '</div><div class="bd flush">'
+    + '<div style="padding:9px 14px 4px;font-weight:700;font-size:11.5px;letter-spacing:.04em;color:var(--ink3)">HARCIRAH</div>';
+  if(a.harcirahlar.length) h += '<table class="ptbl" style="width:100%"><thead><tr><th>Ülke / Şehir</th><th>Tarih aralığı</th><th class="num">Gün</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
+    + a.harcirahlar.sort((x,y) => y.bas.localeCompare(x.bas)).map(x => harcirahSatiri(x, false)).join('') + '</tbody></table>';
+  else h += '<div class="hint" style="padding:0 14px 12px">Bu ay harcırah kaydı yok.</div>';
+  return h + '</div></div>';
 }
 function mesaiAySec(ix){ if(ix===null){ mesaiAyF = tumunuSecToggle(mesaiAyF, [...Array(12).keys()]); ciz(); return; } ayAc('mesai', ix); }
 
