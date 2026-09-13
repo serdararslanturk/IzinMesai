@@ -499,7 +499,9 @@ tbody tr:last-child td{border-bottom:0}
 .aykutu .ak-tutar{font-family:'Archivo'; font-weight:700; font-size:19px; letter-spacing:-.02em; margin-top:5px; line-height:1}
 .aykutu .ak-tutar small{font-size:11px; color:var(--ink3); font-weight:600}
 .aykutu .ak-alt{font-size:11px; color:var(--ink3); margin-top:4px}
-.aykutu .ak-bek{font-size:10.5px; color:#B0821E; margin-top:2px; font-weight:600}
+.aykutu .ak-bek{font-size:10.5px; color:#B0821E; margin-top:4px; font-weight:600}
+.aykutu .ak-tur{font-size:11.5px; color:var(--ink2); margin-top:3px; overflow-wrap:anywhere}
+.aykutu .ak-tur .tl{color:var(--ink3); font-weight:600}
 
 .msdd{margin-top:16px; border:1px solid var(--line); border-radius:12px; overflow:hidden}
 .msdd .msdd-bas{display:flex; align-items:center; gap:10px; padding:10px 14px;
@@ -537,6 +539,18 @@ tbody tr:last-child td{border-bottom:0}
 .ulkeog{padding:9px 12px; cursor:pointer; font-size:13.5px; border-bottom:1px solid var(--line2)}
 .ulkeog:last-child{border-bottom:0}
 .ulkeog:hover{background:var(--brand-soft)}
+
+/* Toplam kutusu içinde mesai / harcırah ayrımı */
+.turayrim{display:flex; gap:0; margin-top:14px; border-top:1px solid var(--line2); padding-top:12px}
+.turkutu{flex:1 1 0; min-width:0}
+.turkutu + .turkutu{padding-left:16px; border-left:1px solid var(--line2)}
+.turkutu:first-child{padding-right:16px}
+.turkutu .k2{font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink3); font-weight:700; display:flex; align-items:center}
+.turkutu .tv{font-family:'Archivo'; font-weight:700; font-size:19px; letter-spacing:-.02em; margin:5px 0 3px}
+@media(max-width:520px){ .turkutu .tv{font-size:16px} }
+.turozet{display:flex; gap:14px 28px; flex-wrap:wrap; margin-top:12px; padding-top:12px; border-top:1px solid var(--line2); font-size:14px}
+.turozet .tl{color:var(--ink3); font-weight:600}
+.turozet .ddot{margin-right:6px}
 
 /* ---------- imza: izin şeridi ---------- */
 .balance{background:var(--surface); border:1px solid var(--line); border-radius:var(--r2); padding:18px; box-shadow:var(--sh)}
@@ -1244,7 +1258,7 @@ const MESAI_VAR = [];
 
 /* ===================== 2. DURUM ve DEPOLAMA ===================== */
 
-let S = {ayar:null, personel:[], izin:[], mesai:[], aktifId:'p_A262', yil:2026, sayfa:'izinlerim', sekme:{}, gorunum:'oto'};
+let S = {ayar:null, personel:[], izin:[], mesai:[], harcirah:[], aktifId:'p_A262', yil:2026, sayfa:'izinlerim', sekme:{}, gorunum:'oto'};
 const MEM = {};
 const KEY = 'acr_izin_mesai_v1';
 
@@ -1263,7 +1277,7 @@ async function depoOku(){
   return MEM[KEY] || null;
 }
 async function depoYaz(){
-  const veri = {ayar:S.ayar, personel:S.personel, izin:S.izin, mesai:S.mesai, aktifId:S.aktifId};
+  const veri = {ayar:S.ayar, personel:S.personel, izin:S.izin, mesai:S.mesai, harcirah:S.harcirah, aktifId:S.aktifId};
   MEM[KEY] = veri;
   if(window.storage){ try{ await window.storage.set(KEY, JSON.stringify(veri)); }catch(e){} }
 }
@@ -1272,6 +1286,7 @@ function varsayilanaDon(){
   S.personel = JSON.parse(JSON.stringify(PERSONEL_VAR));
   S.izin = JSON.parse(JSON.stringify(IZIN_VAR));
   S.mesai = JSON.parse(JSON.stringify(MESAI_VAR));
+  S.harcirah = [];
   S.aktifId = 'p_A262';
 }
 
@@ -1952,7 +1967,7 @@ function onayVazgec(){
   if(geri){ $('#modal').innerHTML = geri; }
   else modalKapat();
 }
-function modalKapat(){ S.kayitKisi = null; S.kayitTip = ''; S.kayitAralik = null; S.onayIslemi = null; S.onayGeri = null; S.dokumGeri = null; S.seciciRefresh = null; S.acikSecici = ''; $('#ov').classList.remove('on'); const m=$('#modal'); m.className='modal'; m.innerHTML = ''; }
+function modalKapat(){ S.kayitKisi = null; S.kayitTip = ''; S.kayitAralik = null; S.onayIslemi = null; S.onayGeri = null; S.dokumGeri = null; S.seciciRefresh = null; S.acikSecici = ''; S.harcirahRevizeId = null; $('#ov').classList.remove('on'); const m=$('#modal'); m.className='modal'; m.innerHTML = ''; }
 
 /* ===================== TANIM LİSTELERİ ve AÇILIR ALANLAR ===================== */
 
@@ -2991,10 +3006,10 @@ function mesaiSatiri(m, yonetimGorunumu, dokum){
     if(mesaiKararVerebilir(m))
       ops += '<button class="btn sm ok" onclick="mesaiKarar(\''+m.id+'\',true)">Onayla</button> '
            + '<button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Reddet</button> ';
-    if(m.durum === 'yonetici_bekliyor' && m.pid === S.aktifId) ops += '<button class="btn sm" onclick="mesaiIptal(\''+m.id+'\')">Geri çek</button> ';
-    if(mesaiRevizeEdilebilir(m)) ops += '<button class="btn sm" onclick="mesaiRevizeAc(\''+m.id+'\')">Revize</button> ';
-    if(mesaiIptalTalebi(m)) ops += '<button class="btn sm no" onclick="mesaiIptal(\''+m.id+'\')">İptal talebi</button> ';
-    if(mesaiSilinebilir(m)) ops += '<button class="btn sm no" onclick="mesaiSil(\''+m.id+'\')">Sil</button> ';
+    if(!yonetimGorunumu){                         // sahip aksiyonları yalnız kişinin kendi görünümünde
+      if(mesaiRevizeEdilebilir(m)) ops += '<button class="btn sm" onclick="mesaiRevizeAc(\''+m.id+'\')">Revize</button> ';
+      if(mesaiIptalTalebi(m)) ops += '<button class="btn sm no" onclick="mesaiIptal(\''+m.id+'\')">İptal talebi</button> ';
+    }
   }
   ops += '<button class="btn sm" onclick="mesaiDetay(\''+m.id+'\')">Detay</button>';
   return '<tr class="kart">'
@@ -3082,21 +3097,22 @@ function vMesailerim(){
   const mList = S.mesai.filter(x => x.pid === p.id && x.tarih.slice(0,4) === String(S.yil) && x.durum !== 'reddedildi' && x.durum !== 'iptal');
   const genelTutar = paraTopla({TL:m.toplamTutar}, ho.gecerli);
   const genelBek   = paraTopla({TL:m.bekleyenTutar}, ho.bekleyen);
-  const toplamKayit = mList.length + ho.adet;
-  const miktarMetni = [m.toplamSaat ? sayi(m.toplamSaat)+' saat' : '', ho.gun ? sayi(ho.gun)+' gün' : ''].filter(Boolean).join(' · ');
 
   h += '<div class="card toplamkutu" style="margin-bottom:14px"><div class="bd">'
+    // üst: birleşik toplam + sağda onay bekleyen / kota
     + '<div class="row" style="justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">'
       + '<div>'
         + '<div class="k" style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:600">Toplam · '+S.yil+'</div>'
         + '<div style="font-family:\'Archivo\';font-weight:700;font-size:30px;letter-spacing:-.02em;line-height:1.05;margin-top:6px">'+paraMetni(genelTutar)+'</div>'
-        + '<div class="hint" style="margin-top:6px">'+([toplamKayit+' kayıt', miktarMetni].filter(Boolean).join(' · '))+'</div>'
       + '</div>'
       + '<div style="text-align:right;display:flex;flex-direction:column;gap:6px">'
         + (paraMetni(genelBek) !== '—' ? '<div class="hint">Onay bekleyen · <b style="color:var(--bekle-ink,#B0821E)">'+paraMetni(genelBek)+'</b></div>' : '')
         + '<div class="hint">Kalan mesai kotası · <b style="color:var(--ink)">'+sayi(Math.max(0,m.kalanKota))+' / '+S.ayar.yillikMesaiSiniri+' saat</b></div>'
       + '</div>'
-    + '</div></div></div>';
+    + '</div>'
+    // alt: mesai ve harcırah ayrı ayrı, etiketli
+    + turOzetHtml(m.toplamTutar, m.toplamSaat, ho.gecerli, ho.gun)
+    + '</div></div>';
 
   if(m.kalanKota < 0) h += '<div class="card" style="margin-bottom:14px;border-color:var(--red-line);background:var(--red-soft)"><div class="bd"><b>Yıllık fazla çalışma sınırı aşıldı.</b> <span class="hint">'+sayi(-m.kalanKota)+' saat sınır üstünde. İK ile görüşün.</span></div></div>';
 
@@ -3107,13 +3123,13 @@ function vMesailerim(){
 /* Kişinin kendi ekranı için aylık mesai+harcırah kutuları; aya tıklayınca o ayın detay tabloları */
 function kisiAyAc(ix){ S.kisiAcikAy = (S.kisiAcikAy === ix) ? null : ix; ciz(); }
 function kisiAylikVeri(pid, yil){
-  const aylar = Array.from({length:12}, (_,ix) => ({ix, tl:0, dovizler:{}, mesaiAdet:0, harcAdet:0, bekVar:false, saat:0, gun:0, mesailer:[], harcirahlar:[]}));
+  const aylar = Array.from({length:12}, (_,ix) => ({ix, tl:0, dovizler:{}, mesaiTl:0, harcCur:{}, mesaiAdet:0, harcAdet:0, bekVar:false, saat:0, gun:0, mesailer:[], harcirahlar:[]}));
   for(const m of S.mesai){
     if(m.pid !== pid || m.tarih.slice(0,4) !== String(yil)) continue;
     if(m.durum === 'reddedildi' || m.durum === 'iptal') continue;
     const a = aylar[Number(m.tarih.slice(5,7)) - 1]; if(!a) continue;
     a.mesaiAdet++; a.saat += m.sure; a.mesailer.push(m);
-    if(m.karsilik === 'ucret') a.tl += mesaiTutar(m);
+    if(m.karsilik === 'ucret'){ a.tl += mesaiTutar(m); a.mesaiTl += mesaiTutar(m); }
     if(BEKLEYEN.includes(m.durum)) a.bekVar = true;
   }
   for(const x of (S.harcirah || [])){
@@ -3121,7 +3137,9 @@ function kisiAylikVeri(pid, yil){
     if(x.durum === 'reddedildi' || x.durum === 'iptal') continue;
     const a = aylar[Number(x.bas.slice(5,7)) - 1]; if(!a) continue;
     a.harcAdet++; a.gun += x.gun || 0; a.harcirahlar.push(x);
-    if((x.dovis || 'TL') === 'TL') a.tl += x.tutar; else a.dovizler[x.dovis] = (a.dovizler[x.dovis] || 0) + x.tutar;
+    const dv = x.dovis || 'TL';
+    a.harcCur[dv] = (a.harcCur[dv] || 0) + x.tutar;
+    if(dv === 'TL') a.tl += x.tutar; else a.dovizler[dv] = (a.dovizler[dv] || 0) + x.tutar;
     if(BEKLEYEN.includes(x.durum)) a.bekVar = true;
   }
   return aylar;
@@ -3143,12 +3161,12 @@ function kisiAylikGorunum(pid){
     const dovizEk = paraMetni(a.dovizler);
     h += '<button type="button" class="aykutu'+(a.ix===acik?' secili':'')+(bos?' bos':'')+'"'+(bos?' disabled':' onclick="kisiAyAc('+a.ix+')"')+'>'
       + '<div class="ak-ay">'+esc(AY[a.ix])+'</div>'
-      + ((a.tl || dovizEk === '—')
-          ? '<div class="ak-tutar">'+sayi(a.tl)+' <small>₺</small></div>'
-            + (dovizEk !== '—' ? '<div class="ak-alt" style="font-weight:700;color:var(--ink2)">+ '+dovizEk+'</div>' : '')
-          : '<div class="ak-tutar" style="font-size:17px">'+esc(dovizEk)+'</div>')
-      + '<div class="ak-alt">'+(bos ? 'kayıt yok' : [a.mesaiAdet?a.mesaiAdet+' mesai':'', a.harcAdet?a.harcAdet+' harcırah':''].filter(Boolean).join(' · '))+'</div>'
-      + (a.bekVar ? '<div class="ak-bek">onay bekleyen var</div>' : '')
+      + (bos
+          ? '<div class="ak-tutar">0 <small>₺</small></div><div class="ak-alt">kayıt yok</div>'
+          : '<div class="ak-tutar" style="font-size:17px">'+paraMetni(paraTopla({TL:a.tl}, a.dovizler))+'</div>'
+            + '<div class="ak-tur"><span class="tl">Mesai:</span> '+sayi(a.mesaiTl)+' ₺</div>'
+            + '<div class="ak-tur"><span class="tl">Harcırah:</span> '+paraMetni(a.harcCur)+'</div>'
+            + (a.bekVar ? '<div class="ak-bek">onay bekleyen var</div>' : ''))
       + '</button>';
   }
   h += '</div>';
@@ -3157,9 +3175,19 @@ function kisiAylikGorunum(pid){
   return h + '</div></div>';
 }
 function kisiAyDetay(pid, a){
+  const mTut = a.mesailer.reduce((s,m) => s + (m.karsilik === 'ucret' ? mesaiTutar(m) : 0), 0);
+  const hGecerli = {}; a.harcirahlar.forEach(x => { hGecerli[x.dovis] = (hGecerli[x.dovis] || 0) + x.tutar; });
+  const genel = paraTopla({TL:mTut}, hGecerli);
+
   let h = '<div class="msdd"><div class="msdd-bas"><b>'+esc(AY[a.ix])+' '+S.yil+'</b>'
     + '<span class="hint" style="font-weight:400">'+[a.mesaiAdet?a.mesaiAdet+' mesai':'', a.harcAdet?a.harcAdet+' harcırah':''].filter(Boolean).join(' · ')+'</span>'
     + '<div class="sp"><button class="btn sm" onclick="kisiAyAc('+a.ix+')">Kapat</button></div></div>';
+  // aynı kutuda: üstte birleşik toplam, altında mesai ve harcırah ayrı
+  h += '<div class="bd" style="border-bottom:1px solid var(--line)">'
+    + '<div class="k" style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:600">Ay toplamı</div>'
+    + '<div style="font-family:\'Archivo\';font-weight:700;font-size:24px;letter-spacing:-.02em;line-height:1.05;margin-top:4px">'+paraMetni(genel)+'</div>'
+    + turOzetHtml(mTut, a.saat, hGecerli, a.gun)
+    + '</div>';
   h += '<div class="bd flush" style="border-bottom:1px solid var(--line)">'
     + '<div style="padding:9px 14px 4px;font-weight:700;font-size:11.5px;letter-spacing:.04em;color:var(--ink3)">FAZLA MESAİ</div>';
   if(a.mesailer.length) h += '<table class="ptbl" style="width:100%"><thead><tr><th>Tarih</th><th>Saat</th><th>Hesaplama</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
@@ -4020,6 +4048,15 @@ function paraMetni(obj){
   return e.length ? e.map(([k,v]) => sayi(v) + ' ' + (DOVIZ_SIM[k] || k)).join(' · ') : '—';
 }
 function paraTopla(a, b){ const r = Object.assign({}, a); for(const k in b) r[k] = (r[k] || 0) + b[k]; return r; }
+/* "Mesai: X ₺ · Harcırah: Y ₺ · Z €" etiketli tür özeti (toplam kutusu ve ay detayında ortak) */
+function turOzetHtml(mTut, mSaat, hGecerli, hGun){
+  return '<div class="turozet">'
+    + '<span><span class="tl"><span class="ddot" style="background:#E08E6F"></span>Mesai:</span> <b>'+sayi(mTut)+' ₺</b>'
+      + (mSaat ? ' <span class="hint">· '+sayi(mSaat)+' saat</span>' : '')+'</span>'
+    + '<span><span class="tl"><span class="ddot" style="background:#3F7CB8"></span>Harcırah:</span> <b>'+paraMetni(hGecerli)+'</b>'
+      + (hGun ? ' <span class="hint">· '+sayi(hGun)+' gün</span>' : '')+'</span>'
+    + '</div>';
+}
 function harcirahKararVerebilir(x){
   if(!x) return false;
   if(!BEKLEYEN.includes(x.durum)) return false;
@@ -4030,11 +4067,12 @@ function harcirahSatiri(x, yon){
   let ops = '';
   if(harcirahKararVerebilir(x))
     ops += '<button class="btn sm ok" onclick="harcirahKarar(\''+x.id+'\',true)">Onayla</button> '
-         + '<button class="btn sm no" onclick="harcirahKarar(\''+x.id+'\',false)">Reddet</button> ';
-  if(x.pid === S.aktifId && BEKLEYEN.includes(x.durum))
-    ops += '<button class="btn sm" onclick="harcirahIptal(\''+x.id+'\')">Geri çek</button> ';
-  if(ikMi() || (x.pid === S.aktifId && x.durum !== 'onaylandi'))
-    ops += '<button class="btn sm no" onclick="harcirahSil(\''+x.id+'\')">Sil</button> ';
+         + '<button class="btn sm no" onclick="harcirahRedAc(\''+x.id+'\')">Reddet</button> ';
+  if(!yon){                                       // sahip aksiyonları yalnız kişinin kendi görünümünde
+    if(x.pid === S.aktifId && BEKLEYEN.includes(x.durum))
+      ops += '<button class="btn sm" onclick="harcirahRevizeAc(\''+x.id+'\')">Revize</button> ';
+  }
+  ops += '<button class="btn sm" onclick="harcirahDetay(\''+x.id+'\')">Detay</button>';
   return '<tr class="kart">'
     + (yon ? '<td data-e="Personel"><div style="font-weight:600">'+esc(adSoyad(x.pid))+'</div><div class="hint">'+esc(per(x.pid)?.dept||'')+'</div></td>' : '')
     + '<td data-e="Ülke / Şehir"><div style="font-weight:600">'+esc(x.ulke)+'</div><div class="hint">'+esc(x.sehir||'')+(x.kapsam==='yurtdisi'?' · yurtdışı':'')+'</div></td>'
@@ -4045,11 +4083,30 @@ function harcirahSatiri(x, yon){
     + '<td class="str">'+(ops || '<span class="hint" style="font-size:11px">—</span>')+'</td></tr>';
 }
 
-function harcirahSehirAlani(ulke){
+function harcirahSehirAlani(ulke, mevcut){
+  mevcut = mevcut || '';
   if(ulke === 'Türkiye')
     return '<label class="lb">Şehir</label><select id="h_sehir" onchange="harcirahHesapla()">'
-      + '<option value="">Seçin…</option>' + TR_ILLER.map(il => '<option>'+esc(il)+'</option>').join('') + '</select>';
-  return '<label class="lb">Şehir</label><input type="text" id="h_sehir" placeholder="Şehir" oninput="harcirahHesapla()">';
+      + '<option value="">Seçin…</option>' + TR_ILLER.map(il => '<option'+(il===mevcut?' selected':'')+'>'+esc(il)+'</option>').join('') + '</select>';
+  return '<label class="lb">Şehir</label><input type="text" id="h_sehir" placeholder="Şehir" value="'+esc(mevcut)+'" oninput="harcirahHesapla()">';
+}
+/* Revize modunda eski/yeni karşılaştırma tablosu (#h_kiyas yalnız revize modalında var) */
+function harcirahKiyasCiz(ulke, sehir, bas, bit, hp){
+  const kel = document.getElementById('h_kiyas'); if(!kel) return;
+  const eski = (S.harcirah || []).find(z => z.id === S.harcirahRevizeId);
+  if(!eski){ kel.innerHTML = ''; return; }
+  const nSim = DOVIZ_SIM[hp.dovis] || hp.dovis, oSim = DOVIZ_SIM[eski.dovis] || eski.dovis;
+  const nYer = esc(ulke)+(sehir ? ' · '+esc(sehir) : ''), oYer = esc(eski.ulke)+(eski.sehir ? ' · '+esc(eski.sehir) : '');
+  const nAralik = (bas && bit) ? trTarih(bas)+' – '+trTarih(bit) : '—', oAralik = trTarih(eski.bas)+' – '+trTarih(eski.bit);
+  const satir = (ad, a, b, deg) => '<tr'+(deg ? ' class="degisti"' : '')+'><th>'+ad+'</th>'
+    + '<td class="eskideger">'+a+'</td><td class="yenideger">'+(deg ? '<b>'+b+'</b>' : '<span class="hint">değişmedi</span>')+'</td></tr>';
+  kel.innerHTML = '<div class="lb" style="margin-bottom:6px">Eski / Yeni karşılaştırma</div>'
+    + '<table class="dtbl kiyas"><thead><tr><th></th><th>Eski hâli</th><th>Yeni hâli</th></tr></thead><tbody>'
+    + satir('Ülke / Şehir', oYer, nYer, nYer !== oYer)
+    + satir('Tarih', oAralik, nAralik, bas !== eski.bas || bit !== eski.bit)
+    + satir('Gün', sayi(eski.gun)+' gün', sayi(hp.gun)+' gün', hp.gun !== eski.gun)
+    + satir('Tutar', sayi(eski.tutar)+' '+oSim, sayi(hp.tutar)+' '+nSim, Math.round(hp.tutar) !== Math.round(eski.tutar) || hp.dovis !== eski.dovis)
+    + '</tbody></table>';
 }
 function harcirahUlkeDegis(){
   const alan = document.getElementById('h_sehiralan');
@@ -4106,6 +4163,7 @@ function harcirahFormu(pid){
   + '<div id="h_uyari" class="mt"></div>'
   + '</div><div class="mf"><button class="btn" onclick="modalKapat()">Vazgeç</button>'
   + '<button class="btn pri" onclick="harcirahKaydet()">Kaydı gönder</button></div>');
+  S.harcirahRevizeId = null;
   S.hTakAcik = ''; S.hTakYil = yilSinirla(d(bugun()).getFullYear()); S.hTakAy = d(bugun()).getMonth();
   harcirahHesapla();
 }
@@ -4130,12 +4188,12 @@ function htakvimGunSec(t){
   const pid = $('#h_pid') ? $('#h_pid').value : S.aktifId;
   if(gecmisTarihMi(t)){ bildir(trTarih(sistemBaslangic())+' tarihinden önceye harcırah girilemez.'); return; }
   if(cikisSonrasiMi(pid, t)){ bildir('İşten çıkış tarihinden ('+trTarih(per(pid).cikis)+') sonrasına harcırah girilemez.'); return; }
-  if(harcirahCakismasi(pid, t, t, null).length){ bildir(trTarih(t)+' tarihinde zaten harcırah kaydınız var.'); return; }
+  if(harcirahCakismasi(pid, t, t, S.harcirahRevizeId || null).length){ bildir(trTarih(t)+' tarihinde zaten harcırah kaydınız var.'); return; }
   const bas = tarihAl('h_bas'), bit = tarihAl('h_bit');
   const hedef = S.hTakAcik || 'h_bas';
   if(hedef === 'h_bit'){
     if(bas && t < bas){ bildir('Bitiş, başlangıçtan önce olamaz.'); return; }
-    if(bas && harcirahCakismasi(pid, bas, t, null).length){ bildir('Seçtiğiniz aralık mevcut bir harcırahla çakışıyor.'); return; }
+    if(bas && harcirahCakismasi(pid, bas, t, S.harcirahRevizeId || null).length){ bildir('Seçtiğiniz aralık mevcut bir harcırahla çakışıyor.'); return; }
     $('#h_bit').value = isoToTr(t);
     S.hTakAcik = '';
   } else {
@@ -4159,7 +4217,7 @@ function htakvimCiz(){
   for(let i = 0; i < bosluk; i++) hucre += '<div class="fb"></div>';
   for(let g = 1; g <= gunSayisi; g++){
     const dt = new Date(yil, ay, g), t = iso(dt);
-    const dolu = harcirahCakismasi(pid, t, t, null)[0];
+    const dolu = harcirahCakismasi(pid, t, t, S.harcirahRevizeId || null)[0];
     const gecmis = gecmisTarihMi(t);
     const cikisSonra = cikisSonrasiMi(pid, t);
     const secilemez = !!dolu || gecmis || cikisSonra;
@@ -4196,7 +4254,8 @@ function harcirahHesapla(){
   if(uyari) uyari.innerHTML = '';
   if(!bas || !bit){ if(ozet) ozet.innerHTML = ''; return; }
   const hp = harcirahHesap(ulke, bas, bit);
-  const cak = harcirahCakismasi(pid, bas, bit, null);
+  harcirahKiyasCiz(ulke, sehir, bas, bit, hp);
+  const cak = harcirahCakismasi(pid, bas, bit, S.harcirahRevizeId || null);
   if(cak.length && uyari) uyari.innerHTML = kutu('r','Tarih çakışması',
     'Bu tarihlerde zaten harcırah kaydınız var: '+cak.map(x=>trTarih(x.bas)+' – '+trTarih(x.bit)).join(', '));
   else if(!hp.gunluk && uyari) uyari.innerHTML = kutu('b','Tarife tanımlı değil',
@@ -4239,21 +4298,129 @@ function harcirahKarar(id, onay){
   const x = (S.harcirah || []).find(h => h.id === id); if(!x) return;
   if(!harcirahKararVerebilir(x)){ bildir('Bu kayda karar verme yetkiniz yok.'); return; }
   x.gecmis = x.gecmis || [];
-  x.gecmis.push({rol:'Yönetici', kisi:adSoyad(S.aktifId), karar:onay?'Onaylandı':'Reddedildi', tarih:bugun(), not:''});
+  x.gecmis.push({rol:'Yönetici', kisi:adSoyad(S.aktifId), karar:onay?'Onaylandı':'Reddedildi', tarih:bugun(), not:(S.redNotu || '')});
+  S.redNotu = '';
   x.durum = onay ? 'onaylandi' : 'reddedildi';
-  kaydet(); ciz();
+  kaydet(); modalKapat(); ciz();
   bildir(adSoyad(x.pid)+' · harcırah '+(onay?'onaylandı.':'reddedildi.'));
 }
 function harcirahIptal(id){
   const x = (S.harcirah || []).find(h => h.id === id); if(!x) return;
   if(!(x.pid === S.aktifId && BEKLEYEN.includes(x.durum))){ bildir('Bu kaydı geri çekemezsiniz.'); return; }
-  x.durum = 'iptal'; kaydet(); ciz(); bildir('Harcırah kaydı geri çekildi.');
+  x.durum = 'iptal'; kaydet(); modalKapat(); ciz(); bildir('Harcırah kaydı geri çekildi.');
 }
 function harcirahSil(id){
   const x = (S.harcirah || []).find(h => h.id === id); if(!x) return;
   if(!(ikMi() || (x.pid === S.aktifId && x.durum !== 'onaylandi'))){ bildir('Bu kaydı silme yetkiniz yok.'); return; }
   onayIste('Harcırah kaydını sil', trTarih(x.bas)+' – '+trTarih(x.bit)+' · '+esc(x.ulke)+' harcırah kaydı silinecek.', 'Sil',
     () => { S.harcirah = (S.harcirah || []).filter(h => h.id !== id); kaydet(); ciz(); bildir('Harcırah kaydı silindi.'); });
+}
+function harcirahDetay(id){
+  const x = (S.harcirah || []).find(h => h.id === id); if(!x) return;
+  if(!gorebilir(x.pid)){ bildir('Bu kaydı görme yetkiniz yok.'); return; }
+  const p = per(x.pid), sim = DOVIZ_SIM[x.dovis] || x.dovis || '';
+  const kararVerebilir = harcirahKararVerebilir(x);
+  modalAc('<div class="mh"><h3>Harcırah kaydı</h3><button class="x" onclick="modalKapat()">×</button></div><div class="mb">'
+  + '<div class="row" style="gap:12px;margin-bottom:16px"><div class="av">'+bas(x.pid)+'</div>'
+  + '<div><div style="font-weight:600;font-size:15px">'+esc(adSoyad(x.pid))+'</div>'
+  + '<div class="hint">'+esc(p.unvan||'')+' · '+esc(p.dept||'')+'</div></div>'
+  + '<div style="margin-left:auto">'+durumTag(x.durum)+'</div></div>'
+  + '<table class="dtbl">'
+  + '<tr><th>Ülke</th><td>'+esc(x.ulke)+' <span class="pill">'+(x.kapsam==='yurtdisi'?'yurtdışı':'yurtiçi')+'</span></td></tr>'
+  + '<tr><th>Şehir</th><td>'+(x.sehir ? esc(x.sehir) : '<span class="hint">—</span>')+'</td></tr>'
+  + '<tr><th>Görev tarihleri</th><td class="mono">'+trTarih(x.bas)+' – '+trTarih(x.bit)+'</td></tr>'
+  + '<tr><th>Gün</th><td><b>'+sayi(x.gun)+' gün</b></td></tr>'
+  + '<tr><th>Günlük harcırah</th><td class="mono">'+sayi(x.gunluk)+' '+sim+'</td></tr>'
+  + '<tr><th>Hesaplama</th><td class="mono">'+sayi(x.gun)+' gün × '+sayi(x.gunluk)+' '+sim+'</td></tr>'
+  + '<tr class="vurgu"><th>Toplam tutar</th><td><b>'+sayi(x.tutar)+' '+sim+'</b></td></tr>'
+  + '<tr><th>Açıklama</th><td>'+(x.aciklama ? esc(x.aciklama) : '<span class="hint">Belirtilmemiş</span>')+'</td></tr>'
+  + '</table>'
+  + '<div class="sep"></div><div class="lb">Onay geçmişi</div><div style="margin-top:6px">'+gecmisHtml(x.gecmis)+'</div>'
+  + '</div><div class="mf">'
+  + ((x.pid===S.aktifId && BEKLEYEN.includes(x.durum)) ? '<button class="btn" style="margin-right:auto" onclick="harcirahIptal(\''+id+'\')">Geri çek</button>' : '')
+  + ((ikMi() || (x.pid===S.aktifId && x.durum!=='onaylandi')) ? '<button class="btn no" onclick="harcirahSil(\''+id+'\')">Sil</button>' : '')
+  + '<button class="btn" onclick="modalKapat()">Kapat</button>'
+  + (kararVerebilir ? '<button class="btn no" onclick="harcirahRedAc(\''+id+'\')">Reddet</button><button class="btn ok" onclick="harcirahKarar(\''+id+'\',true)">Onayla</button>' : '')
+  + '</div>');
+}
+function harcirahRedAc(id){
+  const x = (S.harcirah || []).find(h => h.id === id); if(!x) return;
+  if(!harcirahKararVerebilir(x)){ bildir('Bu kayda karar verme yetkiniz yok.'); return; }
+  const sim = DOVIZ_SIM[x.dovis] || x.dovis || '';
+  modalAc('<div class="mh"><h3>Harcırahı reddet</h3><button class="x" onclick="modalKapat()">×</button></div><div class="mb">'
+  + '<div><b>'+esc(adSoyad(x.pid))+'</b><br>'+esc(x.ulke)+(x.sehir?' · '+esc(x.sehir):'')+' · '+trTarih(x.bas)+' – '+trTarih(x.bit)+' · '+sayi(x.gun)+' gün · '+sayi(x.tutar)+' '+sim+'</div>'
+  + '<div class="fld mt"><label class="lb">Ret gerekçesi</label><textarea id="r_not" placeholder="Kaydın neden reddedildiğini yazın."></textarea></div>'
+  + '<div class="hint mt" style="font-size:12px">Reddetmek yerine kaydı düzenleyip yeniden onaya alabilirsiniz.</div>'
+  + '</div><div class="mf">'
+  + '<button class="btn" style="margin-right:auto" onclick="harcirahRevizeAc(\''+id+'\')">Revize et…</button>'
+  + '<button class="btn" onclick="modalKapat()">Vazgeç</button>'
+  + '<button class="btn no" onclick="harcirahRedUygula(\''+id+'\')">Reddet</button></div>');
+}
+function harcirahRedUygula(id){
+  const notEl = document.getElementById('r_not');
+  S.redNotu = notEl ? notEl.value.trim() : '';
+  harcirahKarar(id, false);
+}
+function harcirahRevizeAc(id){
+  const x = (S.harcirah || []).find(h => h.id === id); if(!x) return;
+  if(!(harcirahKararVerebilir(x) || ikMi() || (x.pid === S.aktifId && BEKLEYEN.includes(x.durum)))){ bildir('Bu kaydı revize etme yetkiniz yok.'); return; }
+  S.harcirahRevizeId = id; S.harcirahRevizePid = x.pid; S.harcirahRevizeKisi = S.kayitKisi;
+  const takvimSvg = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">'
+    + '<rect x="1.5" y="3" width="13" height="11.5" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.3"/>'
+    + '<path d="M1.5 6.5h13M5 1.5v3M11 1.5v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
+  modalAc('<div class="mh"><h3>Harcırahı revize et</h3><button class="x" onclick="modalKapat()">×</button></div><div class="mb">'
+  + '<div class="hint"><b style="color:var(--ink)">'+esc(adSoyad(x.pid))+'</b> · '+esc(per(x.pid)?.dept||'')+'</div>'
+  + '<input type="hidden" id="h_pid" value="'+esc(x.pid)+'">'
+  + '<div id="h_kiyas" class="mt"></div>'
+  + '<div class="grid g2 mt">'
+  + '<div class="fld ulkefld"><label class="lb">Ülke</label>'
+    + '<input type="text" id="h_ulke" value="'+esc(x.ulke)+'" autocomplete="off" placeholder="Ülke arayın…" '
+      + 'oninput="harcirahUlkeAra(this.value)" onfocus="harcirahUlkeAra(this.value)" onblur="setTimeout(harcirahUlkeListeKapat,150)" onchange="harcirahUlkeDegis()">'
+    + '<div id="h_ulkeliste" class="ulkeliste" hidden></div></div>'
+  + '<div class="fld" id="h_sehiralan">'+harcirahSehirAlani(x.ulke, x.sehir)+'</div>'
+  + '<div class="fld"><label class="lb">Görev tarihleri</label>'
+    + '<button type="button" class="tarihsec" id="h_tarihbtn" onclick="htakvimAc(\'h_bas\')"><span id="h_tarihyazi">Takvimden seçin</span>'+takvimSvg+'</button></div>'
+  + '</div>'
+  + '<input type="hidden" id="h_bas" value="'+esc(isoToTr(x.bas))+'"><input type="hidden" id="h_bit" value="'+esc(isoToTr(x.bit))+'">'
+  + '<div id="h_takvim"></div>'
+  + '<div id="h_ozet" class="mt"></div>'
+  + '<div class="fld mt"><label class="lb">Revize gerekçesi</label><textarea id="h_rnot" placeholder="Değişikliğin nedenini yazın."></textarea></div>'
+  + '<div id="h_uyari" class="mt"></div>'
+  + (x.durum === 'onaylandi' ? kutu('b','Yeniden onaya gidecek','Bu kayıt onaylanmış durumda. Kaydedince yeniden onaya düşer, eski hâli kayıtlarda saklanır.') : '')
+  + '</div><div class="mf">'
+  + ((x.pid === S.aktifId && BEKLEYEN.includes(x.durum)) ? '<button class="btn no" style="margin-right:auto" onclick="harcirahIptal(\''+id+'\')">Talebi geri çek</button>' : '')
+  + '<button class="btn" onclick="modalKapat()">Vazgeç</button>'
+  + '<button class="btn pri" onclick="harcirahRevizeKaydet(\''+id+'\')">Revizeyi gönder</button></div>');
+  S.hTakAcik = ''; S.hTakYil = yilSinirla(d(x.bas).getFullYear()); S.hTakAy = d(x.bas).getMonth();
+  harcirahHesapla();
+}
+function harcirahRevizeKaydet(id){
+  const x = (S.harcirah || []).find(h => h.id === id); if(!x) return;
+  const ulke = ($('#h_ulke').value || '').trim();
+  const sehir = $('#h_sehir') ? $('#h_sehir').value.trim() : '';
+  const bas = tarihAl('h_bas'), bit = tarihAl('h_bit');
+  const notu = ($('#h_rnot') ? $('#h_rnot').value : '').trim();
+  if(!ulke){ bildir('Ülke seçin.'); return; }
+  if(!bas || !bit){ bildir('Görev tarih aralığını seçin.'); return; }
+  if(bit < bas){ bildir('Bitiş, başlangıçtan önce olamaz.'); return; }
+  if(!sehir){ bildir('Şehir bilgisini girin.'); return; }
+  if(gecmisTarihMi(bas)){ bildir(trTarih(sistemBaslangic())+' tarihinden önceye harcırah girilemez.'); return; }
+  if(cikisSonrasiMi(x.pid, bit)){ bildir('İşten çıkış tarihinden sonrasına harcırah girilemez.'); return; }
+  if(harcirahCakismasi(x.pid, bas, bit, id).length){ bildir('Bu tarihlerde zaten başka harcırah kaydı var.'); return; }
+  const hp = harcirahHesap(ulke, bas, bit);
+  if(!hp.gunluk){ bildir('Ayarlarda '+(hp.kapsam==='yurtici'?'yurtiçi':'yurtdışı')+' harcırah tarifesi tanımlı değil.'); return; }
+  if(ulke === x.ulke && sehir === x.sehir && bas === x.bas && bit === x.bit){ bildir('Değişiklik yapılmadı.'); return; }
+  if(!notu){ bildir('Revize gerekçesi yazın.'); return; }
+  const eskiMetin = esc(x.ulke)+(x.sehir?'/'+esc(x.sehir):'')+' · '+trTarih(x.bas)+'–'+trTarih(x.bit)+' · '+sayi(x.gun)+' gün · '+sayi(x.tutar)+' '+(DOVIZ_SIM[x.dovis]||x.dovis);
+  const yeniMetin = esc(ulke)+(sehir?'/'+esc(sehir):'')+' · '+trTarih(bas)+'–'+trTarih(bit)+' · '+sayi(hp.gun)+' gün · '+sayi(hp.tutar)+' '+(DOVIZ_SIM[hp.dovis]||hp.dovis);
+  x.gecmis = x.gecmis || [];
+  x.gecmis.push({rol:'Revize', kisi:adSoyad(S.aktifId), karar:'Değiştirildi', tarih:bugun(), eski:eskiMetin, yeni:yeniMetin, gerekce:notu});
+  x.ulke = ulke; x.sehir = sehir; x.kapsam = hp.kapsam; x.bas = bas; x.bit = bit;
+  x.gun = hp.gun; x.gunluk = hp.gunluk; x.dovis = hp.dovis; x.tutar = hp.tutar;
+  x.durum = 'yonetici_bekliyor';
+  S.harcirahRevizeId = null;
+  kaydet(); modalKapat(); ciz();
+  bildir('Harcırah revize edildi, yeniden onaya gönderildi.');
 }
 
 /* ===================== 8. ONAY AKIŞI ===================== */
@@ -4392,7 +4559,10 @@ function izinRedAc(id){
   + trTarih(i.bas)+' – '+trTarih(i.bit)+' · '+sayi(i.gun)+' gün</div>'
   + '<div class="fld mt"><label class="lb">Ret gerekçesi</label>'
   + '<textarea id="r_not" placeholder="Talebin neden reddedildiğini yazın; personel bu notu görecek."></textarea></div>'
-  + '</div><div class="mf"><button class="btn" onclick="modalKapat()">Vazgeç</button>'
+  + (izinRevizeEdilebilir(i) ? '<div class="hint mt" style="font-size:12px">Reddetmek yerine talebi düzenleyip yeniden onaya alabilirsiniz.</div>' : '')
+  + '</div><div class="mf">'
+  + (izinRevizeEdilebilir(i) ? '<button class="btn" style="margin-right:auto" onclick="izinRevizeAc(\''+id+'\')">Revize et…</button>' : '')
+  + '<button class="btn" onclick="modalKapat()">Vazgeç</button>'
   + '<button class="btn no" onclick="izinRedUygula(\''+id+'\',\''+(kisi||'')+'\')">Reddet</button></div>');
 }
 function izinRedUygula(id, kisi){
@@ -4412,7 +4582,10 @@ function mesaiRedAc(id){
   + '<div><b>'+esc(adSoyad(m.pid))+'</b><br>'+trTarih(m.tarih)+' · '+m.bas+' – '+m.bit+' · '+sayi(m.sure)+' saat</div>'
   + '<div class="fld mt"><label class="lb">Ret gerekçesi</label>'
   + '<textarea id="r_not" placeholder="Kaydın neden reddedildiğini yazın."></textarea></div>'
-  + '</div><div class="mf"><button class="btn" onclick="modalKapat()">Vazgeç</button>'
+  + '<div class="hint mt" style="font-size:12px">Reddetmek yerine kaydı düzenleyip yeniden onaya alabilirsiniz.</div>'
+  + '</div><div class="mf">'
+  + '<button class="btn" style="margin-right:auto" onclick="mesaiRevizeAc(\''+id+'\')">Revize et…</button>'
+  + '<button class="btn" onclick="modalKapat()">Vazgeç</button>'
   + '<button class="btn no" onclick="mesaiRedUygula(\''+id+'\',\''+(kisi||'')+'\')">Reddet</button></div>');
 }
 function mesaiRedUygula(id, kisi){
@@ -4840,8 +5013,7 @@ function mesaiRevizeAc(id){
   S.revizeId = id; S.revizePid = m.pid;
   modalAc('<div class="mh"><h3>Mesai kaydını revize et</h3><button class="x" onclick="modalKapat()">×</button></div>'
   + '<div class="mb">'
-  + '<div class="hint">'+esc(adSoyad(m.pid))+' · mevcut kayıt: '+trTarih(m.tarih)+' · '+m.bas+' – '+m.bit
-  + ' · '+sayi(m.sure)+' saat · '+esc(mturBul(m.tur).ad)+'</div>'
+  + '<div class="hint"><b style="color:var(--ink)">'+esc(adSoyad(m.pid))+'</b> · '+esc(per(m.pid)?.dept||'')+'</div>'
   + '<div class="grid g2 mt">'
   + tarihFld('Tarih','rm_tarih',m.tarih,'mesaiRevizeHesapla()')
   + '<div class="ikili tamsat">'
@@ -4856,29 +5028,37 @@ function mesaiRevizeAc(id){
   + '<textarea id="rm_not" placeholder="Değişikliğin nedenini yazın."></textarea></div>'
   + (m.durum === 'onaylandi' ? kutu('b','Yeniden onaya gidecek',
       'Bu kayıt onaylanmış durumda. Kaydedince yeniden yönetici onayına düşer, eski hâli kayıtlarda saklanır.') : '')
-  + '</div><div class="mf"><button class="btn" onclick="modalKapat()">Vazgeç</button>'
+  + '</div><div class="mf">'
+  + (m.pid === S.aktifId ? '<button class="btn no" style="margin-right:auto" onclick="mesaiIptal(\''+id+'\')">'
+      + (m.durum === 'onaylandi' ? 'Mesaiyi geri çek (onaya gider)' : 'Talebi geri çek')+'</button>' : '')
+  + '<button class="btn" onclick="modalKapat()">Vazgeç</button>'
   + '<button class="btn pri" onclick="mesaiRevizeKaydet(\''+id+'\')">Revizeyi gönder</button></div>');
   mesaiRevizeHesapla();
 }
 
 function mesaiRevizeHesapla(){
   const el = document.getElementById('rm_ozet'); if(!el) return;
-  const m2 = S.mesai.find(x => x.id === S.revizeId);
-  const sure = saatFark($('#rm_bas').value, $('#rm_bit').value);
-  const t = mturBul(mesaiTurTespit(tarihAl('rm_tarih')));
-  const kar = 'ucret';
-  const cakId = S.revizeId || '';
-  const cak = mesaiCakismasi($('#rm_pid') ? $('#rm_pid').value : (S.revizePid||''),
-    tarihAl('rm_tarih'), $('#rm_bas').value, $('#rm_bit').value, cakId);
-  el.innerHTML = (cak.length
-      ? kutu('r','Bu saatlerde zaten mesai kaydı var', mesaiCakismaMetni(cak))
-      : '')
-    + '<div class="ozet"><div class="ozet-h">'
-    + '<div class="lb">Süre</div><div class="v">'+sayi(sure)+'<small>saat</small></div>'
-    + '<div class="s">'+esc(t.ad)+' · ×'+t.carpan.toFixed(2)+'</div></div>'
-    + '<div class="ozet-h"><div class="lb">Tutar</div>'
-    + '<div class="v">'+sayi(sure * t.carpan * saatlikUcret(m2 ? m2.pid : S.revizePid))+'<small>₺</small></div>'
-    + '<div class="s">Zamlı ücret · ×'+t.carpan.toFixed(2).replace('.',',')+'</div></div></div>';
+  const m2 = S.mesai.find(x => x.id === S.revizeId); if(!m2) return;
+  const nTarih = tarihAl('rm_tarih'), nBas = $('#rm_bas').value, nBit = $('#rm_bit').value;
+  const nSure = saatFark(nBas, nBit);
+  const nTur = mturBul(mesaiTurTespit(nTarih)), oTur = mturBul(m2.tur);
+  const uc = saatlikUcret(m2.pid);
+  const nTutar = nSure * nTur.carpan * uc, oTutar = mesaiTutar(m2);
+  const cak = mesaiCakismasi(m2.pid, nTarih, nBas, nBit, S.revizeId || '');
+
+  const satir = (etiket, eski, yeni, degisti) =>
+    '<tr><th>'+etiket+'</th><td class="hint">'+eski+'</td>'
+    + '<td'+(degisti ? ' style="color:var(--brand);font-weight:700"' : '')+'>'+yeni+(degisti ? ' <span class="pill" style="font-size:10px">değişti</span>' : '')+'</td></tr>';
+
+  el.innerHTML = (cak.length ? kutu('r','Bu saatlerde zaten mesai kaydı var', mesaiCakismaMetni(cak)) : '')
+    + '<div class="lb" style="margin-bottom:6px">Eski / Yeni karşılaştırma</div>'
+    + '<table class="dtbl kars"><thead><tr><th></th><th>Eski</th><th>Yeni</th></tr></thead><tbody>'
+    + satir('Tarih', trTarih(m2.tarih), nTarih ? trTarih(nTarih) : '—', !!nTarih && nTarih !== m2.tarih)
+    + satir('Saat', m2.bas+' – '+m2.bit, nBas+' – '+nBit, nBas !== m2.bas || nBit !== m2.bit)
+    + satir('Süre', sayi(m2.sure)+' saat', sayi(nSure)+' saat', nSure !== m2.sure)
+    + satir('Mesai türü', esc(oTur.ad), esc(nTur.ad), nTur.kod !== oTur.kod)
+    + satir('Tutar', sayi(oTutar)+' ₺', sayi(nTutar)+' ₺', Math.round(nTutar) !== Math.round(oTutar))
+    + '</tbody></table>';
 }
 
 function mesaiRevizeKaydet(id){
@@ -5282,10 +5462,10 @@ function kisiKayitlariCiz(){
       + (izinKararVerebilir(i)
           ? '<button class="btn sm ok" onclick="izinKarar(\''+i.id+'\',true)">Onayla</button> '
             + '<button class="btn sm no" onclick="izinRedAc(\''+i.id+'\')">Reddet</button> ' : '')
-      + (izinRevizeEdilebilir(i) ? '<button class="btn sm" onclick="izinRevizeAc(\''+i.id+'\')">Revize</button> ' : '')
+      + ((i.pid === S.aktifId && izinRevizeEdilebilir(i)) ? '<button class="btn sm" onclick="izinRevizeAc(\''+i.id+'\')">Revize</button> ' : '')
       + (izinIptalTalebi(i) ? '<button class="btn sm no" onclick="izinIptal(\''+i.id+'\')">İptal talebi</button> ' : '')
       + '<button class="btn sm" onclick="kayitDetay(\'izin\',\''+i.id+'\')">Detay</button> '
-      + (izinSilinebilir(i) ? '<button class="btn sm no" onclick="kayitSil(\'izin\',\''+i.id+'\')">Sil</button>' : '')
+      + ((i.pid === S.aktifId || ikMi()) && izinSilinebilir(i) ? '<button class="btn sm no" onclick="kayitSil(\'izin\',\''+i.id+'\')">Sil</button>' : '')
       + '</span></div>';
   };
   const mesaiSatir = m => '<div class="row" style="gap:10px;padding:8px 10px;border-bottom:1px solid var(--line2)">'
@@ -5298,10 +5478,10 @@ function kisiKayitlariCiz(){
       + (mesaiKararVerebilir(m)
           ? '<button class="btn sm ok" onclick="mesaiKarar(\''+m.id+'\',true)">Onayla</button> '
             + '<button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Reddet</button> ' : '')
-      + (mesaiRevizeEdilebilir(m) ? '<button class="btn sm" onclick="mesaiRevizeAc(\''+m.id+'\')">Revize</button> ' : '')
+      + ((m.pid === S.aktifId && mesaiRevizeEdilebilir(m)) ? '<button class="btn sm" onclick="mesaiRevizeAc(\''+m.id+'\')">Revize</button> ' : '')
       + (mesaiIptalTalebi(m) ? '<button class="btn sm no" onclick="mesaiIptal(\''+m.id+'\')">İptal talebi</button> ' : '')
       + '<button class="btn sm" onclick="kayitDetay(\'mesai\',\''+m.id+'\')">Detay</button> '
-      + '<button class="btn sm no" onclick="kayitSil(\'mesai\',\''+m.id+'\')">Sil</button>'
+      + ((m.pid === S.aktifId || ikMi()) ? '<button class="btn sm no" onclick="kayitSil(\'mesai\',\''+m.id+'\')">Sil</button>' : '')
       + '</span></div>';
 
   /* Yıl içindeki tür kırılımı */
@@ -6432,11 +6612,34 @@ function msAyDrilldown(a){
           + '<span class="msk-ad">'+esc(adSoyad(k.pid))+'<span class="hint" style="font-weight:400"> · '+esc(per(k.pid)?.unvan||'')+'</span></span>'
           + '<span class="msd-say">'+k.adet+' kayıt · '+sayi(k.saat)+' saat</span>'
           + '<span class="msd-tut mono">'+sayi(k.tutar)+' ₺</span>'
-          + '<button class="btn sm" onclick="kisiKayitlari(\''+k.pid+'\',\'mesai\',\''+bas+'\',\''+bit+'\')">Kayıtlar</button></div>';
+          + '<button class="btn sm" onclick="msKisiAyMesai(\''+k.pid+'\',\''+bas+'\',\''+bit+'\')">Kayıtlar</button></div>';
       }
     }
   }
   return h + '</div>';
+}
+/* Aylık drilldown → kişinin o ayki mesai kayıtları; onay veren buradan onaylar/reddeder */
+function msKisiAyMesai(pid, bas, bit){
+  if(!gorebilir(pid)){ bildir('Bu kişinin kayıtlarını görme yetkiniz yok.'); return; }
+  const liste = S.mesai.filter(m => m.pid === pid && m.tarih >= bas && m.tarih <= bit
+                        && m.durum !== 'reddedildi' && m.durum !== 'iptal')
+                       .sort((a,c) => c.tarih.localeCompare(a.tarih));
+  const ayAd = AY[Number(bas.slice(5,7)) - 1] + ' ' + bas.slice(0,4);
+  const satir = m => { const t = mturBul(m.tur);
+    return '<tr><td class="mono" style="font-size:12.5px;white-space:nowrap">'+trTarih(m.tarih)+'</td>'
+      + '<td class="mono" style="font-size:12.5px">'+m.bas+' – '+m.bit+'</td>'
+      + '<td>'+mesaiHesapMetni(m)+'</td>'
+      + '<td class="num mono" style="font-size:12.5px">'+(m.karsilik==='ucret' ? sayi(mesaiTutar(m))+' ₺' : '<span class="hint">'+sayi(m.sure*t.carpan)+' sa izin</span>')+'</td>'
+      + '<td>'+durumTag(m.durum)+'</td>'
+      + '<td class="str">'+(mesaiKararVerebilir(m)
+          ? '<button class="btn sm ok" onclick="mesaiKarar(\''+m.id+'\',true)">Onayla</button> <button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Reddet</button> ' : '')
+        + '<button class="btn sm" onclick="mesaiDetay(\''+m.id+'\')">Detay</button></td></tr>'; };
+  modalAc('<div class="mh"><h3 class="mbaslik">'+esc(adSoyad(pid))+' · '+ayAd+'</h3><button class="x" onclick="modalKapat()">×</button></div>'
+    + '<div class="mb"><div class="bd flush"><table class="ptbl" style="width:100%"><thead><tr>'
+    + '<th>Tarih</th><th>Saat</th><th>Hesaplama</th><th class="num">Tutar</th><th>Durum</th><th class="str">İşlem</th></tr></thead><tbody>'
+    + (liste.length ? liste.map(satir).join('') + mesaiDipToplam(liste)
+        : '<tr><td colspan="6"><div class="hint" style="padding:14px 0;text-align:center">Bu ay mesai kaydı yok.</div></td></tr>')
+    + '</tbody></table></div></div><div class="mf"><button class="btn" onclick="modalKapat()">Kapat</button></div>', true);
 }
 
 /* Kapsam: üst yönetim ve İK tüm şirket, yönetici kendi kadrosu */
@@ -6515,7 +6718,10 @@ function vMesaiListe(){
           + (m.karsilik==='ucret' ? sayi(mesaiTutar(m))+' ₺'
              : '<span class="hint">'+sayi(m.sure*t.carpan)+' sa izin</span>')+'</td>'
         + '<td>'+durumTag(m.durum)+'</td>'
-        + '<td class="str"><button class="btn sm" onclick="mesaiDetay(\''+m.id+'\')">Detay</button></td></tr>';
+        + '<td class="str">'
+          + (mesaiKararVerebilir(m) ? '<button class="btn sm ok" onclick="mesaiKarar(\''+m.id+'\',true)">Onayla</button> '
+              + '<button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Reddet</button> ' : '')
+          + '<button class="btn sm" onclick="mesaiDetay(\''+m.id+'\')">Detay</button></td></tr>';
     }
     h += msDipToplam(kayitlar) + '</tbody></table></div></div>';
   }
@@ -7942,13 +8148,42 @@ function listeyiTazele(){
   bildir(n ? n+' eksik alan dosyadaki listeden tamamlandı.' : 'Eksik alan bulunamadı, kayıtlar güncel.');
 }
 
+/* TEST VERİSİ — ECE ER (p_A016) için sabit 2 izin + 2 mesai + 2 harcırah, hepsi onay bekliyor.
+   Her açılışta yenilenir; onaylanıp reddedilse bile reload sonrası yeniden bekliyor gelir.
+   Kaldırmak için bu fonksiyonu ve baslat() içindeki çağrısını silmen yeterli. */
+function testKayitlariHazirla(){
+  const pid = 'p_A016';
+  if(!per(pid)) return;
+  const tekmi = id => !String(id).startsWith('test_ece_');
+  S.izin = (S.izin || []).filter(i => tekmi(i.id));
+  S.mesai = (S.mesai || []).filter(m => tekmi(m.id));
+  S.harcirah = (S.harcirah || []).filter(x => tekmi(x.id));
+
+  const izTur = (S.ayar.izinTurleri[0] || {}).kod || 'yillik';
+  const iz = (id, bas, bit) => ({id, pid, tur:izTur, bas, bit, gun:isGunu(bas, bit), durum:'yonetici_bekliyor', gecmis:[]});
+  S.izin.push(iz('test_ece_izin1', '2026-09-21', '2026-09-25'));
+  S.izin.push(iz('test_ece_izin2', '2026-10-05', '2026-10-07'));
+
+  const me = (id, tarih, bas, bit) => ({id, pid, tarih, bas, bit, sure:saatFark(bas, bit),
+    tur:mesaiTurTespit(tarih), karsilik:'ucret', aciklama:'Test mesai kaydı', durum:'yonetici_bekliyor', gecmis:[]});
+  S.mesai.push(me('test_ece_mesai1', '2026-09-08', '18:00', '21:00'));   // hafta içi
+  S.mesai.push(me('test_ece_mesai2', '2026-09-13', '18:00', '20:00'));   // pazar
+
+  const ha = (id, ulke, sehir, bas, bit) => { const hp = harcirahHesap(ulke, bas, bit);
+    return {id, pid, ulke, sehir, kapsam:hp.kapsam, bas, bit, gun:hp.gun, gunluk:hp.gunluk, dovis:hp.dovis, tutar:hp.tutar,
+      aciklama:'Test görevi', durum:'yonetici_bekliyor', gecmis:[]}; };
+  S.harcirah.push(ha('test_ece_harc1', 'Türkiye', 'Ankara', '2026-09-10', '2026-09-12'));
+  S.harcirah.push(ha('test_ece_harc2', 'Almanya', 'Berlin', '2026-09-20', '2026-09-22'));
+}
+
 async function baslat(){
   const kayitli = await depoOku();
   if(kayitli && kayitli.personel && kayitli.personel.length){
     S.ayar = Object.assign(JSON.parse(JSON.stringify(AYAR_VAR)), kayitli.ayar || {});
-    S.personel = kayitli.personel; S.izin = kayitli.izin || []; S.mesai = kayitli.mesai || [];
+    S.personel = kayitli.personel; S.izin = kayitli.izin || []; S.mesai = kayitli.mesai || []; S.harcirah = kayitli.harcirah || [];
     S.aktifId = kayitli.aktifId && kayitli.personel.some(p=>p.id===kayitli.aktifId) ? kayitli.aktifId : kayitli.personel[0].id;
   } else varsayilanaDon();
+  S.harcirah = S.harcirah || [];
 
   const eksik = gocEt();
   S.ayar.gunlukSaat = S.ayar.gunlukSaat || 7.5;
@@ -7999,6 +8234,7 @@ async function baslat(){
   for(const k of ['dept','lokasyon','unvan']) S.ayar.listeler[k] = S.ayar.listeler[k] || [];
 
   unvanBaglariniKur();
+  testKayitlariHazirla();
   S.yil = yilSinirla(new Date().getFullYear());
 
   S.gorunum = S.gorunum || 'oto';
