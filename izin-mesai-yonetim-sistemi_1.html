@@ -2844,7 +2844,7 @@ function izinSatiri(i, yonetimGorunumu){
   let ops = '';
   if(izinKararVerebilir(i))
     ops += '<button class="btn sm ok" onclick="izinKarar(\''+i.id+'\',true)">Onayla</button> '
-         + '<button class="btn sm no" onclick="izinRedAc(\''+i.id+'\')">Reddet</button> ';
+         + '<button class="btn sm no" onclick="izinRedAc(\''+i.id+'\')">Red/Revize</button> ';
   // Revize yalnızca talep sahibine (personel) gösterilir; onaylayan yönetici görmez.
   // Geri çekme/iptal Revize ekranının içinde (ayrı buton yok). Sil butonu yok.
   if(izinRevizeEdilebilir(i) && i.pid === S.aktifId) ops += '<button class="btn sm" onclick="izinRevizeAc(\''+i.id+'\')">Revize</button> ';
@@ -3005,7 +3005,7 @@ function mesaiSatiri(m, yonetimGorunumu, dokum){
   if(!dokum){                                    // döküm görünümünde yalnız Detay; aksiyonlar Detay ekranından
     if(mesaiKararVerebilir(m))
       ops += '<button class="btn sm ok" onclick="mesaiKarar(\''+m.id+'\',true)">Onayla</button> '
-           + '<button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Reddet</button> ';
+           + '<button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Red/Revize</button> ';
     if(!yonetimGorunumu){                         // sahip aksiyonları yalnız kişinin kendi görünümünde
       if(mesaiRevizeEdilebilir(m)) ops += '<button class="btn sm" onclick="mesaiRevizeAc(\''+m.id+'\')">Revize</button> ';
       if(mesaiIptalTalebi(m)) ops += '<button class="btn sm no" onclick="mesaiIptal(\''+m.id+'\')">İptal talebi</button> ';
@@ -3159,7 +3159,12 @@ function vMesailerim(){
 }
 
 /* Kişinin kendi ekranı için aylık mesai+harcırah kutuları; aya tıklayınca o ayın detay tabloları */
-function kisiAyAc(ix){ S.kisiAcikAy = (S.kisiAcikAy === ix) ? null : ix; ciz(); }
+function kisiAyAc(ix){
+  const pid = S.aktifId;
+  const a = kisiAylikVeri(pid, S.yil)[ix];
+  if(!a || (a.mesaiAdet + a.harcAdet) === 0) return;
+  kisiAyDetay(pid, a);
+}
 function kisiAylikVeri(pid, yil){
   const aylar = Array.from({length:12}, (_,ix) => ({ix, tl:0, dovizler:{}, mesaiTl:0, harcCur:{}, mesaiAdet:0, harcAdet:0, bekVar:false, saat:0, gun:0, mesailer:[], harcirahlar:[]}));
   for(const m of S.mesai){
@@ -3190,18 +3195,13 @@ function kisiAylikGorunum(pid){
   const aylar = kisiAylikVeri(pid, S.yil);
   const yilTl = aylar.reduce((a,x) => a + x.tl, 0);
   const yilDoviz = {}; aylar.forEach(a => { for(const k in a.dovizler) yilDoviz[k] = (yilDoviz[k] || 0) + a.dovizler[k]; });
-  const yilSaat = aylar.reduce((a,x) => a + x.saat, 0);
-  const yilGun  = aylar.reduce((a,x) => a + x.gun, 0);
-  const acik = (typeof S.kisiAcikAy === 'number' && aylar[S.kisiAcikAy] && (aylar[S.kisiAcikAy].mesaiAdet + aylar[S.kisiAcikAy].harcAdet)) ? S.kisiAcikAy : null;
-
   let h = '<div class="card"><div class="hd"><h3>Aylık</h3>'
-    + '<div class="sp hint" style="font-size:11.5px">Bir aya tıklayın · mesai ve harcırah detayı açılır</div></div><div class="bd">';
+    + '<div class="sp hint" style="font-size:11.5px">Bir aya tıklayın · mesai ve harcırah detayı ayrı pencerede açılır</div></div><div class="bd">';
 
   h += '<div class="aygrid2">';
   for(const a of aylar){
     const bos = (a.mesaiAdet + a.harcAdet) === 0;
-    const dovizEk = paraMetni(a.dovizler);
-    h += '<button type="button" class="aykutu'+(a.ix===acik?' secili':'')+(bos?' bos':'')+'"'+(bos?' disabled':' onclick="kisiAyAc('+a.ix+')"')+'>'
+    h += '<button type="button" class="aykutu'+(bos?' bos':'')+'"'+(bos?' disabled':' onclick="kisiAyAc('+a.ix+')"')+'>'
       + '<div class="ak-ay">'+esc(AY[a.ix])+'</div>'
       + (bos
           ? '<div class="ak-tutar">0 <small>₺</small></div><div class="ak-alt">kayıt yok</div>'
@@ -3212,8 +3212,6 @@ function kisiAylikGorunum(pid){
       + '</button>';
   }
   h += '</div>';
-  h += (acik !== null) ? kisiAyDetay(pid, aylar[acik])
-    : '<div class="hint" style="margin-top:14px">Bir ay kutusuna tıklayın → o ayın mesai ve harcırah detayları açılır.</div>';
   return h + '</div></div>';
 }
 function kisiAyDetay(pid, a){
@@ -3221,10 +3219,9 @@ function kisiAyDetay(pid, a){
   const hGecerli = a.harcCur;             // aya düşen harcırah (döviz bazında)
   const genel = paraTopla({TL:mTut}, hGecerli);
 
-  let h = '<div class="msdd"><div class="msdd-bas"><b>'+esc(AY[a.ix])+' '+S.yil+'</b>'
-    + '<span class="hint" style="font-weight:400">'+[a.mesaiAdet?a.mesaiAdet+' mesai':'', a.harcAdet?a.harcAdet+' harcırah':''].filter(Boolean).join(' · ')+'</span>'
-    + '<div class="sp"><button class="btn sm" onclick="kisiAyAc('+a.ix+')">Kapat</button></div></div>';
-  // aynı kutuda: üstte birleşik toplam, altında mesai ve harcırah ayrı
+  let h = '<div class="mh"><h3 class="mbaslik">'+esc(AY[a.ix])+' '+S.yil
+    + '</h3><button class="x" onclick="modalKapat()">×</button></div><div class="mb" style="padding:0">';
+  // üstte birleşik toplam, altında mesai ve harcırah ayrı
   h += '<div class="bd" style="border-bottom:1px solid var(--line)">'
     + '<div class="k" style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:600">Ay toplamı</div>'
     + '<div style="font-family:\'Archivo\';font-weight:700;font-size:24px;letter-spacing:-.02em;line-height:1.05;margin-top:4px">'+paraMetni(genel)+'</div>'
@@ -3253,7 +3250,8 @@ function kisiAyDetay(pid, a){
           + '<td class="str">'+ops+'</td></tr>';
       }).join('') + '</tbody></table>';
   else h += '<div class="hint" style="padding:0 14px 12px">Bu ay harcırah kaydı yok.</div>';
-  return h + '</div></div>';
+  h += '</div></div><div class="mf"><button class="btn" onclick="modalKapat()">Kapat</button></div>';
+  modalAc(h, true);
 }
 function mesaiAySec(ix){ if(ix===null){ mesaiAyF = tumunuSecToggle(mesaiAyF, [...Array(12).keys()]); ciz(); return; } ayAc('mesai', ix); }
 
@@ -4134,7 +4132,7 @@ function harcirahSatiri(x, yon){
   let ops = '';
   if(harcirahKararVerebilir(x))
     ops += '<button class="btn sm ok" onclick="harcirahKarar(\''+x.id+'\',true)">Onayla</button> '
-         + '<button class="btn sm no" onclick="harcirahRedAc(\''+x.id+'\')">Reddet</button> ';
+         + '<button class="btn sm no" onclick="harcirahRedAc(\''+x.id+'\')">Red/Revize</button> ';
   if(!yon){                                       // sahip aksiyonları yalnız kişinin kendi görünümünde
     if(x.pid === S.aktifId && BEKLEYEN.includes(x.durum))
       ops += '<button class="btn sm" onclick="harcirahRevizeAc(\''+x.id+'\')">Revize</button> ';
@@ -4407,7 +4405,7 @@ function harcirahDetay(id){
   + '</div><div class="mf">'
   + ((x.pid===S.aktifId && BEKLEYEN.includes(x.durum)) ? '<button class="btn" style="margin-right:auto" onclick="harcirahIptal(\''+id+'\')">Geri çek</button>' : '')
   + '<button class="btn" onclick="modalKapat()">Kapat</button>'
-  + (kararVerebilir ? '<button class="btn no" onclick="harcirahRedAc(\''+id+'\')">Reddet</button><button class="btn ok" onclick="harcirahKarar(\''+id+'\',true)">Onayla</button>' : '')
+  + (kararVerebilir ? '<button class="btn no" onclick="harcirahRedAc(\''+id+'\')">Red/Revize</button><button class="btn ok" onclick="harcirahKarar(\''+id+'\',true)">Onayla</button>' : '')
   + '</div>');
 }
 function harcirahRedAc(id){
@@ -5535,7 +5533,7 @@ function kisiKayitlariCiz(){
       + '<span style="margin-left:auto;white-space:nowrap">'
       + (izinKararVerebilir(i)
           ? '<button class="btn sm ok" onclick="izinKarar(\''+i.id+'\',true)">Onayla</button> '
-            + '<button class="btn sm no" onclick="izinRedAc(\''+i.id+'\')">Reddet</button> ' : '')
+            + '<button class="btn sm no" onclick="izinRedAc(\''+i.id+'\')">Red/Revize</button> ' : '')
       + ((i.pid === S.aktifId && izinRevizeEdilebilir(i)) ? '<button class="btn sm" onclick="izinRevizeAc(\''+i.id+'\')">Revize</button> ' : '')
       + (izinIptalTalebi(i) ? '<button class="btn sm no" onclick="izinIptal(\''+i.id+'\')">İptal talebi</button> ' : '')
       + '<button class="btn sm" onclick="kayitDetay(\'izin\',\''+i.id+'\')">Detay</button> '
@@ -5551,7 +5549,7 @@ function kisiKayitlariCiz(){
       + '<span style="margin-left:auto;white-space:nowrap">'
       + (mesaiKararVerebilir(m)
           ? '<button class="btn sm ok" onclick="mesaiKarar(\''+m.id+'\',true)">Onayla</button> '
-            + '<button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Reddet</button> ' : '')
+            + '<button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Red/Revize</button> ' : '')
       + ((m.pid === S.aktifId && mesaiRevizeEdilebilir(m)) ? '<button class="btn sm" onclick="mesaiRevizeAc(\''+m.id+'\')">Revize</button> ' : '')
       + (mesaiIptalTalebi(m) ? '<button class="btn sm no" onclick="mesaiIptal(\''+m.id+'\')">İptal talebi</button> ' : '')
       + '<button class="btn sm" onclick="kayitDetay(\'mesai\',\''+m.id+'\')">Detay</button> '
@@ -6706,7 +6704,7 @@ function msKisiAyMesai(pid, bas, bit){
       + '<td class="num mono" style="font-size:12.5px">'+(m.karsilik==='ucret' ? sayi(mesaiTutar(m))+' ₺' : '<span class="hint">'+sayi(m.sure*t.carpan)+' sa izin</span>')+'</td>'
       + '<td>'+durumTag(m.durum)+'</td>'
       + '<td class="str">'+(mesaiKararVerebilir(m)
-          ? '<button class="btn sm ok" onclick="mesaiKarar(\''+m.id+'\',true)">Onayla</button> <button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Reddet</button> ' : '')
+          ? '<button class="btn sm ok" onclick="mesaiKarar(\''+m.id+'\',true)">Onayla</button> <button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Red/Revize</button> ' : '')
         + '<button class="btn sm" onclick="mesaiDetay(\''+m.id+'\')">Detay</button></td></tr>'; };
   modalAc('<div class="mh"><h3 class="mbaslik">'+esc(adSoyad(pid))+' · '+ayAd+'</h3><button class="x" onclick="modalKapat()">×</button></div>'
     + '<div class="mb"><div class="bd flush"><table class="ptbl" style="width:100%"><thead><tr>'
@@ -6794,7 +6792,7 @@ function vMesaiListe(){
         + '<td>'+durumTag(m.durum)+'</td>'
         + '<td class="str">'
           + (mesaiKararVerebilir(m) ? '<button class="btn sm ok" onclick="mesaiKarar(\''+m.id+'\',true)">Onayla</button> '
-              + '<button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Reddet</button> ' : '')
+              + '<button class="btn sm no" onclick="mesaiRedAc(\''+m.id+'\')">Red/Revize</button> ' : '')
           + '<button class="btn sm" onclick="mesaiDetay(\''+m.id+'\')">Detay</button></td></tr>';
     }
     h += msDipToplam(kayitlar) + '</tbody></table></div></div>';
