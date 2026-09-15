@@ -82,6 +82,43 @@ a{color:var(--brand)}
 .raporsec .rmetin b{font-size:15px; color:#215C8C}
 .raporsec .rmetin span{font-size:12.5px; color:var(--ink3); line-height:1.35}
 .raporsec i{font-style:normal; font-size:22px; color:#5A87A3}
+/* Dar ekran sıkı rapor tablosu (izin hakları): kişi başına tek satır */
+.mtblwrap{overflow-x:auto; -webkit-overflow-scrolling:touch}
+.mtbl{width:100%; border-collapse:collapse; font-size:12px}
+.mtbl th{background:var(--surface2); color:var(--ink3); font-size:10.5px; font-weight:700; letter-spacing:.02em;
+  text-transform:uppercase; padding:8px 4px; border-bottom:1px solid var(--line); white-space:nowrap; text-align:left}
+.mtbl th.num{text-align:right}
+.mtbl .num{font-family:inherit; font-variant-numeric:tabular-nums}   /* eş aralıklı yazı tipi dar ekranda fazla yer kaplıyor */
+.mtbl th{padding:8px 2px; font-size:9.5px; letter-spacing:0}
+.mtbl td{padding:8px 2px; border-bottom:1px solid var(--line2); vertical-align:middle; white-space:nowrap; background:var(--surface)}
+.mtbl th:first-child, .mtbl td:first-child{padding-left:7px; position:sticky; left:0; z-index:1}
+.mtbl th:last-child, .mtbl td:last-child{padding-right:7px}
+/* sütun payları: fazla genişlik sayı sütunlarına dağılsın, Personel şişmesin */
+.mtbl th:first-child{width:25%}
+.mtbl th.mdept{width:17%}
+.mtbl td.mad b, .mtbl td.mad span{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mtbl td.mad b{font-size:11.5px; font-weight:600; line-height:1.25; white-space:normal; overflow-wrap:break-word}   /* uzun isim kesilmez, alta geçer */
+.mtbl td.mad span{font-size:10.5px; color:var(--ink3); margin-top:1px}
+.mtbl td.mkalan{font-weight:700}
+.mtbl td.msonraki span{display:block; font-size:10.5px; color:var(--ink3)}
+.mtbl tbody tr{cursor:pointer}
+.mtbl tbody tr:nth-child(even) td{background:#F7F9F8}
+.mtbl tbody tr:active td{background:var(--brand-soft)}
+.mtblnot{padding:10px 12px 12px; font-size:11.5px; line-height:1.45}
+.mtbl th{vertical-align:bottom}
+.mtbl td.mdept{white-space:normal; font-size:10px; line-height:1.25; color:var(--ink2)}
+.mtbl td.msonraki{font-size:11px}
+/* başlıktaki süzgeçler: dar sütuna sığsın */
+.mtbl .fsat input{min-width:0; width:100%; padding:4px 6px; font-size:16px}
+.mtbl .coksec{position:static}
+.mtbl th.mdept{z-index:5}   /* açılan liste sabit isim sütununun altında kalmasın */
+.mtbl .cokbtn{min-width:0}
+.mtbl button.basliksec{padding:5px 5px 5px 6px; font-size:10.5px; letter-spacing:.02em; border-radius:6px}
+.mtbl button.basliksec.dolu{font-size:10.5px; text-transform:none}
+.mtbl th.mdept button.basliksec{width:58px}   /* seçilen uzun departman adı sütunu genişletmesin ("…" ile kısalır) */
+/* açılan liste: sütuna değil ekrana göre, iki kenardan boşluklu (kaydırılan tablo kutusunda kırpılmasın) */
+.mtbl .cokpan{position:fixed; top:auto; left:16px; right:16px; width:auto; max-width:none; min-width:0;
+  text-transform:none; letter-spacing:0; font-weight:400}
 .vbar{background:var(--bekle-soft); border-bottom:1px solid var(--bekle-line); padding:8px 22px; font-size:12.5px; color:var(--bekle); display:flex; align-items:center; gap:10px; flex-wrap:wrap}
 .vbar b{color:var(--ink)}
 .vbar .btn{margin-left:auto}
@@ -944,6 +981,7 @@ tbody tr.dgrup td{border-bottom:1px solid var(--line)}
   /* sabit genişlikli alanlar ekrana uysun */
   .card .hd input[type=text], .card .hd select, .bd input[type=text]{width:100%!important; max-width:100%}
   .card .hd{flex-wrap:wrap}
+  .card .hd.rapust{display:none}   /* izin hakları raporu: kişi sayısı + sıralama şeridi */
   .card .hd > *{max-width:100%}
   input[type=number]{max-width:100%}
   .cokpan{min-width:0; width:min(280px, calc(100vw - 34px)); max-width:none; left:auto; right:0}
@@ -6509,9 +6547,9 @@ function rapDeptler(){
 function rapLoklar(){
   return [...new Set(takvimKisiler().map(p => p.lokasyon || '').filter(Boolean))].sort((a,b) => a.localeCompare(b,'tr'));
 }
-function rapAra(v){
+function rapAra(v, kutu){
   rapF.q = v; ciz();
-  const el = document.getElementById('rapAraKutu');
+  const el = document.getElementById(kutu || 'rapAraKutu');   // dar ekranda ayrı arama kutusu
   if(el){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
 }
 
@@ -6555,7 +6593,8 @@ function vRapor(){
     + '<div class="hint">'+ekipAdi+' · '+S.yil+' dönemi</div></div>'
     + '<div class="row"><button class="btn" onclick="rapDisaAktar()">CSV indir</button></div></div>';
 
-  h += '<div class="card"><div class="hd">'
+  // dar ekranda bu üst şerit (kişi sayısı, sıralama) gizli — süzgeçler tablo başlığında
+  h += '<div class="card"><div class="hd rapust">'
     + '<span class="hint">'+kisiler.length+' kişi</span>'
     + (filtreVar ? '<button class="btn sm" onclick="rapTemizle()">Filtreyi temizle</button>' : '')
     + '<div class="sp"></div>'
@@ -6569,7 +6608,33 @@ function vRapor(){
   h += '<div class="bd flush">';
   if(!veriler.length) h += '<div class="empty"><div class="e1">Kayıt bulunamadı</div>Filtreleri değiştirerek yeniden deneyin.</div>';
   else {
-    h += '<div class="twpair">'+ustCubuk()+'<div class="tw"><table class="ptbl"><thead><tr>'
+    // dar ekran: kişi başına tek satır, kısaltılmış başlıklar; satıra dokununca kayıtlar açılır
+    const kisaT = t => t.slice(8,10)+'.'+t.slice(5,7)+'.'+t.slice(2,4);
+    // başlıkta arama (Personel) ve departman seçimi (Dept.) — genişteki tablonun aynı süzgeçleri
+    h += '<div class="yalnizdar"><div class="mtblwrap"><table class="mtbl"><thead><tr>'
+      + '<th>Personel<div class="fsat"><input type="text" id="rapAraKutuM" placeholder="Ara…" value="'+esc(rapF.q)+'"'
+        + ' oninput="rapAra(this.value,\'rapAraKutuM\')"></div></th>'
+      + '<th class="mdept">'+baslikSecici('rapDeptM','Dept.', depts, rapF.dept, 'rapDeptSec')+'</th>'
+      + '<th class="num">D.B.</th><th class="num">Kul.</th>'
+      + '<th class="num">Kalan</th><th class="num">+Gel.</th><th class="num">H.S.</th><th class="num">Sonr.</th>'
+      + '</tr></thead><tbody>'
+      + veriler.map(({p, b}) =>
+          '<tr onclick="kisiKayitlari(\''+p.id+'\')">'
+          + '<td class="mad"><b>'+esc(p.ad+' '+p.soyad)+'</b><span>'+kidemYiliTarihte(p.id, bugun())+' yıl kıdem</span></td>'
+          + '<td class="mdept">'+esc(p.dept||'')+'</td>'
+          + '<td class="num">'+sayi(b.devir)+'</td>'
+          + '<td class="num"'+(b.yilToplamKullanim?' style="color:var(--red)"':'')+'>'+(b.yilToplamKullanim?'−':'')+sayi(b.yilToplamKullanim)+'</td>'
+          + '<td class="num mkalan"'+(b.kalan<0?' style="color:var(--red)"':'')+'>'+sayi(b.kalan)+'</td>'
+          + '<td class="num">'+(b.yilSonuEk ? '+'+sayi(b.yilSonuEk) : '0')+'</td>'
+          + '<td class="num" style="font-weight:600">'+sayi(b.yilSonuKalan)+'</td>'
+          + '<td class="num msonraki">'+(b.sonraki ? kisaT(b.sonraki.tarih)+'<span>+'+b.sonraki.gun+'</span>' : '—')+'</td>'
+          + '</tr>').join('')
+      + '</tbody></table></div>'
+      + '<div class="hint mtblnot">Dept.: departman · D.B.: dönem başı · Kul.: kullanılan · Kalan: güncel kalan · '
+      + '+Gel.: hak edişten gelecek · H.S.: hak ediş sonrası · Sonr.: sonraki hak ediş tarihi ve gün. '
+      + 'Kayıtlar için satıra dokunun.</div></div>';
+
+    h += '<div class="twpair yalnizgenis">'+ustCubuk()+'<div class="tw"><table class="ptbl"><thead><tr>'
       + '<th class="stl">Personel<div class="fsat">'
         + '<input type="text" id="rapAraKutu" placeholder="Ara…" value="'+esc(rapF.q)+'" oninput="rapAra(this.value)"></div></th>'
       + '<th>'+baslikSecici('rapDept','Departman', depts, rapF.dept, 'rapDeptSec')+'</th>'

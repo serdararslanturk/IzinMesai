@@ -53,6 +53,7 @@
 4. **Mesai/Harcırah** ana düğmeleri mobilde yan yana (`.anabtnlar`).
 5. **İzin taleplerim düğmesi** (mobil): İzin talebi'nin yanında, rozetli; listeyi pencerede açar (`izinTaleplerimAc`). Ortak parçalar: `izinTaleplerimVeri/Ozet/Govde`; Gördüm sonrası `taleplerPenceresiTazele()`. Mobilde sayfadaki İzin Taleplerim kartı gizli (`yalnizgenis`).
 6. Kart görünümünde sticky işlem sütununun sol çizgisi kaldırıldı (`.ptbl tr.kart td.str`).
+7. **İzin hakları raporu mobil tablo** (`vRapor`, `.mtbl`): dar ekranda kart yerine kişi başına tek satır; sütunlar Personel (altında kıdem) · Dept. · D.B. · Kul. · Kalan · +Gel. · H.S. · Sonr. (tarih + gün). Başlıkta arama (`#rapAraKutuM`, `rapAra(v, kutu)`) ve departman seçimi (`baslikSecici('rapDeptM',...)`, masaüstüyle ortak `rapF.dept`); açılan liste `position:fixed` + `th.mdept{z-index:5}`. Sütun payları Personel %25 / Dept. %17 (geniş dar-ekranda şişmesin). Satıra dokun → `kisiKayitlari`. Mobilde kişi sayısı + sıralama şeridi gizli (`.hd.rapust`). Masaüstü tablo aynen.
 
 ## Sırada / olası işler
 - Mobilde İzinlerim'de 5 özet kartından sonuncusu tek başına kalıyor — tam genişliğe yaymak önerildi (bekliyor).
