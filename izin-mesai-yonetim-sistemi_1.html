@@ -989,9 +989,16 @@ tbody tr.dgrup td{border-bottom:1px solid var(--line)}
   .tw{max-width:100%}
   table:not(.ptbl){min-width:0}
 
-  /* takvim ızgarası tamamen devre dışı */
-  .yalnizgenis, .twpair.takvimtw{display:none!important}
+  .yalnizgenis{display:none!important}
+  /* takvim ızgarası: yana kayar, isim sütunu solda sabit ve dar */
   .cal{min-width:0}
+  .twpair.takvimtw .tw-top{display:none!important}
+  .cal th.pn{min-width:0; width:96px; padding-left:8px}
+  .cal td.pn{white-space:normal; min-width:96px; max-width:96px; padding:6px 8px; font-size:11.5px; line-height:1.2}
+  .cal td.pn .hint{font-size:10px!important; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .cal td.pn .pill{font-size:10px; padding:0 5px}
+  .cal th.kose{padding:5px 8px}
+  .cal th.kose .kosenav{font-size:11px}
 
   /* kartlaşmayan tablolar (ayarlar) kendi içinde kaysın, sayfayı itmesin */
   .tw, .twpair{max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch}
@@ -2813,8 +2820,9 @@ function cizGovde(){
   const fn = {izinlerim:vIzinlerim, liste:vListe, mesailiste:vMesaiListe, izinde:vIzinde, mesailerim:vMesailerim, onay:vOnay, raporlar:vRaporlar,
               takvim:vTakvim, personel:vPersonel, rapor:vRapor, kadro:vKadro,
               ayar_org:vAyar, ayar_izin:vAyar, ayar_mesai:vAyar, ayar_genel:vAyar}[S.sayfa];
+  const tkKaydirma = S.sayfa === 'takvim' ? takvimKaydirmaOku() : null;
   $('#page').innerHTML = fn ? fn() : '';
-  if(S.sayfa === 'takvim') takvimBoya();
+  if(S.sayfa === 'takvim') guvenli(() => takvimKaydirmaYaz(tkKaydirma));
   guvenli(ustKaydirmaBagla);
   guvenli(tabloEtiketle);
   guvenli(aySelCiz);
@@ -5485,7 +5493,8 @@ function takvimTablo(kisiler){
   const dar = gunler.length > 62;
   const bugunS = bugun();
 
-  let h = '<div class="twpair takvimtw">'+ustCubuk()+'<div class="calwrap"><table class="cal'
+  // data-k: gösterilen dönem — yeniden çizimde kaydırma yeri korunsun, dönem değişince bugüne gidilsin
+  let h = '<div class="twpair takvimtw">'+ustCubuk()+'<div class="calwrap" data-k="'+S.yil+':'+ayListesi('takvim').join(',')+'"><table class="cal'
     + (dar?' dar':'') + (ayAdedi>1?' cok':'') + '"><thead>';
 
   // birden çok ay varsa üstte ay başlıkları
@@ -5647,8 +5656,10 @@ function vTakvim(){
 
   h += '<div class="bd okumaserit">'
     + '<div id="takvimOkuma" class="hint" style="font-size:12.5px;min-height:18px">'
-    + 'Bir hücrenin üzerine gelin — gün, tarih ve kişi burada görünür.</div></div>'
-    + '<div class="bd flush yalnizgenis">'+takvimTablo(kisiler)+'</div>'
+    + (darEkran() ? 'Bir hücreye dokunun — gün, tarih ve kişi burada görünür. Günler için yana kaydırın.'
+                  : 'Bir hücrenin üzerine gelin — gün, tarih ve kişi burada görünür.')+'</div></div>'
+    // ızgara dar ekranda da gösterilir (yana kayar); altında dar ekrana özel kayıt listesi
+    + '<div class="bd flush">'+takvimTablo(kisiler)+'</div>'
     + '<div class="bd flush yalnizdar">'+takvimListesi(kayitlar)+'</div>';
 
   h += '</div>';
@@ -5661,6 +5672,18 @@ function takvimSecimTemizle(){ S.takvimSecim = null; }
 
 
 function takvimBoya(){}
+
+/* Takvim ızgarasının kaydırma yeri: yeniden çizimde korunur; ilk açılışta / dönem değişince bugünün sütununa gider */
+function takvimKaydirmaOku(){
+  const w = document.querySelector('.calwrap');
+  return w ? {l: w.scrollLeft, t: w.scrollTop, k: w.dataset.k} : null;
+}
+function takvimKaydirmaYaz(eski){
+  const w = document.querySelector('.calwrap'); if(!w) return;
+  if(eski && eski.k === w.dataset.k){ w.scrollLeft = eski.l; w.scrollTop = eski.t; return; }
+  const bg = w.querySelector('thead th.bgn'), pn = w.querySelector('thead th.pn');
+  if(bg && pn) w.scrollLeft = Math.max(0, bg.offsetLeft - pn.offsetWidth - 2 * bg.offsetWidth);
+}
 
 
 /* Bir kişinin izin ve mesai kayıtlarını kullanıcı değiştirmeden yönetme */
