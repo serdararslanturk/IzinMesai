@@ -165,6 +165,19 @@ select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml
 .btn.pri.harcbtn:hover{background:#356aa0; border-color:#2c5988}
 /* "İzin taleplerim" düğmesi yalnız dar ekranda (genişte İzin Taleplerim kartı sayfada durur) */
 .btn.taleplerbtn{display:none}
+/* İzin talebinde "Araç ile gidiyorum" — tek tıkla açılıp kapanan seçim */
+.aracsec{display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+  padding:9px 14px; border:1.5px solid var(--line); border-radius:10px; background:var(--surface);
+  font-size:13.5px; font-weight:600; color:var(--ink2); transition:.12s}
+.aracsec input{width:auto; margin:0; accent-color:#215C8C; flex:none}
+.aracsec:hover{border-color:#9CC4E4}
+.aracsec.secili{border-color:#5AA3DC; background:#E6F1F9; color:#215C8C}
+.pill.arac{display:inline-flex; align-items:center; gap:4px; background:#E6F1F9; color:#215C8C; border-color:#BFD8ED; vertical-align:middle}
+.pill.arac svg{width:14px; height:14px}
+.aracsec svg{flex:none}
+.aracplaka{margin-top:8px; max-width:240px}
+.aracplaka input{font-family:'IBM Plex Mono',monospace; letter-spacing:.04em; text-transform:uppercase}
+.aracplaka input::placeholder{letter-spacing:.04em}
 .btn.ok{background:var(--onay); border-color:var(--onay); color:#fff}
 .btn.ok:hover{filter:brightness(.93)}
 .btn.no{background:var(--surface); border-color:var(--red-line); color:var(--red)}
@@ -939,6 +952,8 @@ tbody tr.dgrup td{border-bottom:1px solid var(--line)}
   .anabtnlar{flex-wrap:nowrap; width:100%; align-items:stretch}
   .anabtnlar .btn.pri.anabtn{flex:1 1 0; width:auto; min-width:0; font-size:16px; padding:18px 8px; white-space:nowrap}
   .anabtnlar .pill{flex:1 1 0; justify-content:center; margin-bottom:12px}
+  .aracsec{display:flex; width:100%; padding:12px 14px; font-size:15px}   /* telefonda kolay dokunulsun */
+  .aracplaka{max-width:none}
   /* İzinlerim: "İzin taleplerim" düğmesi, İzin talebi düğmesinin yanında */
   .btn.taleplerbtn{display:inline-flex; position:relative}
   .btn.pri.taleplerbtn, .btn.pri.taleplerbtn:hover, .btn.pri.taleplerbtn:active{
@@ -2975,7 +2990,7 @@ function izinSatiri(i, yonetimGorunumu){
 
   return '<tr class="kart">'
     + (yonetimGorunumu ? '<td data-e="Personel"><div style="font-weight:600">'+esc(adSoyad(i.pid))+'</div><div class="hint">'+esc(p?p.dept:'')+'</div></td>' : '')
-    + '<td data-e="Tür" class="bas"><span class="tag n" style="border-color:'+t.renk+'55;color:'+t.renk+'"><i class="dot"></i>'+esc(t.ad)+'</span></td>'
+    + '<td data-e="Tür" class="bas"><span class="tag n" style="border-color:'+t.renk+'55;color:'+t.renk+'"><i class="dot"></i>'+esc(t.ad)+'</span>'+aracRozet(i)+'</td>'
     + '<td data-e="Tarih" class="mono" style="font-size:12.5px;white-space:nowrap">'
       + (saatliIzin(i) ? trTarih(i.bas)+' · '+i.saatBas+' – '+i.saatBit
                        : trTarih(i.bas)+' – '+trTarih(i.bit))+'</td>'
@@ -3512,6 +3527,53 @@ function izinDokumCiz(){
 
 /* ===================== 7. TALEP FORMLARI ===================== */
 
+/* ---- Araç ile gidiş: izin talebinde tek tıkla işaretlenir (kayıtta i.arac) ---- */
+const ARAC_SVG = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor"'
+  + ' stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+  + '<path d="M5 11l1.6-4.2A2 2 0 0 1 8.5 5.5h7a2 2 0 0 1 1.9 1.3L19 11"/>'
+  + '<rect x="2.5" y="11" width="19" height="6" rx="1.3"/>'
+  + '<path d="M6 14h1.6M16.4 14H18"/>'
+  + '<circle cx="7" cy="18.2" r="1.7" fill="currentColor" stroke="none"/><circle cx="17" cy="18.2" r="1.7" fill="currentColor" stroke="none"/></svg>';
+/* Seçim düğmesi + araç seçilince açılan plaka alanı (id+'_plaka') */
+function aracSecici(id, secili, kendisi, degis, plaka){
+  const ek = degis ? ';'+degis : '';
+  return '<label class="aracsec'+(secili?' secili':'')+'">'
+    + '<input type="checkbox" id="'+id+'"'+(secili?' checked':'')+' onchange="aracDegis(this,\''+id+'\')'+ek+'">'
+    + ARAC_SVG + (kendisi ? 'Araç ile gidiyorum' : 'Araç ile gidiyor') + '</label>'
+    + '<div class="fld aracplaka" id="'+id+'_plakaalan"'+(secili?'':' style="display:none"')+'>'
+    + '<label class="lb">Araç plakası</label>'
+    + '<input type="text" id="'+id+'_plaka" value="'+esc(plaka||'')+'" placeholder="34 ABC 123" maxlength="12"'
+    + ' autocomplete="off" autocapitalize="characters" oninput="this.value=this.value.toUpperCase()'+ek+'"'
+    + ' onblur="this.value=plakaDuzenle(this.value)'+ek+'"></div>';
+}
+function aracDegis(cb, id){
+  cb.parentNode.classList.toggle('secili', cb.checked);
+  const alan = document.getElementById(id+'_plakaalan');
+  if(!alan) return;
+  alan.style.display = cb.checked ? '' : 'none';
+  if(cb.checked) document.getElementById(id+'_plaka').focus();
+}
+function aracSecili(id, varsayilan){ const el = document.getElementById(id); return el ? el.checked : !!varsayilan; }
+function aracPlakaOku(id){ const el = document.getElementById(id+'_plaka'); return el ? plakaDuzenle(el.value) : ''; }
+/* Plaka: boşluk/işaretler atılır, büyük harfe çevrilir, "34 ABC 123" biçimine getirilir */
+function plakaDuzenle(v){
+  const s = String(v || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+  const m = s.match(/^(\d{2})([A-Z]{1,3})(\d{2,5})$/);
+  return m ? m[1]+' '+m[2]+' '+m[3] : s;
+}
+function plakaGecerli(v){ return /^(0[1-9]|[1-7]\d|8[01]) [A-Z]{1,3} \d{2,5}$/.test(plakaDuzenle(v)); }
+/* Araç seçiliyse plaka zorunlu ve geçerli olmalı; sorun varsa uyarı metni döner */
+function aracPlakaHatasi(arac, plaka){
+  if(!arac) return '';
+  if(!plaka) return 'Araç ile gidiliyorsa plakayı girin.';
+  if(!plakaGecerli(plaka)) return 'Plakayı 34 ABC 123 biçiminde girin.';
+  return '';
+}
+function aracYazi(arac, plaka){ return arac ? 'Evet' + (plaka ? ' · ' + esc(plaka) : '') : 'Hayır'; }
+function aracRozet(i){
+  return i && i.arac ? ' <span class="pill arac" title="Araç ile gidiyor">'+ARAC_SVG+(i.plaka ? esc(i.plaka) : 'Araçla')+'</span>' : '';
+}
+
 function izinFormu(pid, basTarih, bitTarih){
   const hedef = pid || S.aktifId;
   const secilebilir = S.personel.filter(x => x.aktif && izinGirebilir(x.id));
@@ -3552,6 +3614,7 @@ function izinFormu(pid, basTarih, bitTarih){
   + '<input type="hidden" id="f_bit" value="'+esc(isoToTr(bitisS))+'">'
   + '<div id="f_takvim"></div>'
   + '<div id="f_ozet" class="mt"></div>'
+  + '<div class="mt">'+aracSecici('f_arac', false, hedef === S.aktifId)+'</div>'
   + '<div class="fld mt"><label class="lb">Açıklama</label><textarea id="f_ack" placeholder="Talebin gerekçesi, iletişim bilgisi, vekâlet bırakılan kişi…"></textarea></div>'
   + '<div id="f_uyari" class="mt"></div>'
   + '</div>'
@@ -3953,6 +4016,9 @@ function izinKaydet(){
   }
   const eksiUyari = eksiSinirUyari(pid, tur, bit, saatli ? (saat / gunlukCalismaSaati()) : gun, null);
   if(eksiUyari){ bildir(eksiUyari); return; }
+  const arac = aracSecili('f_arac'), plaka = arac ? aracPlakaOku('f_arac') : '';
+  const plakaHata = aracPlakaHatasi(arac, plaka);
+  if(plakaHata){ bildir(plakaHata); document.getElementById('f_arac_plaka').focus(); return; }
   const ihlal = grupIhlali(pid, bas, bit, null);
   const gerekceEl = document.getElementById('f_gerekce');
   const gerekce = gerekceEl ? gerekceEl.value.trim() : '';
@@ -3972,6 +4038,7 @@ function izinKaydet(){
   S.izin.push({id:yeniId('i'), pid, tur, bas, bit, gun,
     saatBas:sbas, saatBit:sbit, saat,
     aciklama:$('#f_ack').value.trim(),
+    arac, plaka,
     durum:ilkDurum, olusturma:bugun(), gecmis, grupNot, grupGerekce:gerekce});
   S.gerekceTaslak = '';
   kaydet(); modalKapat();
@@ -4730,6 +4797,8 @@ function izinDetay(id){
         ? esc(i.saatBit)+' <span class="hint">aynı gün</span>'
         : trTarih(sonrakiIsGunu(i.bit)) + (saatliIzin(i) ? ' · '+calismaBas() : '')
           + ' <span class="hint">'+GUN_TAM[d(sonrakiIsGunu(i.bit)).getDay()]+'</span>')+'</td></tr>'
+  + '<tr><th>Araç ile</th><td>'+(i.arac ? '<b>Evet</b>'+(i.plaka ? ' · Plaka <b class="mono">'+esc(i.plaka)+'</b>' : '')
+                                       : '<span class="hint">Hayır</span>')+'</td></tr>'
   + '<tr><th>Talep tarihi</th><td class="mono">'+trTarih(i.olusturma)+'</td></tr>'
   + '<tr class="vurgu"><th>Talep sonrası kalan</th><td><b>'+sayi(b.kalan)+' gün</b></td></tr>'
   + '<tr><th>Açıklama</th><td>'+(i.aciklama ? esc(i.aciklama) : '<span class="hint">Belirtilmemiş</span>')+'</td></tr>'
@@ -4947,6 +5016,7 @@ function izinRevizeAc(id){
   + '<input type="hidden" id="rv_bit" value="'+esc(isoToTr(i.bit))+'">'
   + '<div id="rv_takvim"></div>'
   + '<div id="rv_ozet" class="mt"></div>'
+  + '<div class="mt">'+aracSecici('rv_arac', !!i.arac, i.pid === S.aktifId, 'revizeHesapla()', i.plaka)+'</div>'
   + '<div class="fld mt"><label class="lb">Revize gerekçesi</label>'
   + '<textarea id="rv_not" placeholder="Değişikliğin nedenini yazın; yöneticiniz bunu görecek."></textarea></div>'
   + (i.durum === 'onaylandi' ? kutu('b','Yeniden onaya gidecek',
@@ -5106,6 +5176,8 @@ function revizeHesapla(){
       + satir('Bitiş', trTarih(eski.bit), bit ? trTarih(bit) : '—')
       + satir('Gün', sayi(eski.gun)+' gün', sayi(gun)+' gün')
       + satir('İşe başlama', trTarih(sonrakiIsGunu(eski.bit)), donus ? trTarih(donus) : '—')
+      + satir('Araç ile', aracYazi(eski.arac, eski.plaka),
+              aracYazi(aracSecili('rv_arac', eski.arac), aracSecili('rv_arac', eski.arac) ? aracPlakaOku('rv_arac') : ''))
       + '</tbody></table>';
   }
 }
@@ -5119,7 +5191,10 @@ function izinRevizeKaydet(id){
   if(cikisSonrasiMi(i.pid, bit)){ bildir('İşten çıkış tarihinden ('+trTarih(per(i.pid).cikis)+') sonrasına izin girilemez.'); return; }
   const gun = isGunu(bas, bit);
   if(gun === 0){ bildir('Seçilen aralıkta iş günü yok.'); return; }
-  if(bas === i.bas && bit === i.bit && tur === i.tur){ bildir('Değişiklik yapılmadı.'); return; }
+  const arac = aracSecili('rv_arac', i.arac), plaka = arac ? aracPlakaOku('rv_arac') : '';
+  const plakaHata = aracPlakaHatasi(arac, plaka);
+  if(plakaHata){ bildir(plakaHata); document.getElementById('rv_arac_plaka').focus(); return; }
+  if(bas === i.bas && bit === i.bit && tur === i.tur && arac === !!i.arac && plaka === (i.plaka || '')){ bildir('Değişiklik yapılmadı.'); return; }
   const cak = kendiCakismasi(i.pid, bas, bit, i.id);
   if(cak.length){
     bildir(trTarih(cak[0].bas)+' – '+trTarih(cak[0].bit)+' tarihlerindeki kayıtla çakışıyor.');
@@ -5129,15 +5204,17 @@ function izinRevizeKaydet(id){
   if(eksiUyari){ bildir(eksiUyari); return; }
   if(!notu){ bildir('Revize gerekçesi yazın.'); return; }
 
-  const eski = turBul(i.tur).ad + ' · ' + trTarih(i.bas) + ' – ' + trTarih(i.bit) + ' · ' + sayi(i.gun) + ' gün';
-  const yeni = turBul(tur).ad + ' · ' + trTarih(bas) + ' – ' + trTarih(bit) + ' · ' + sayi(gun) + ' gün';
+  const eski = turBul(i.tur).ad + ' · ' + trTarih(i.bas) + ' – ' + trTarih(i.bit) + ' · ' + sayi(i.gun) + ' gün'
+             + (i.arac ? ' · araçla' + (i.plaka ? ' ('+i.plaka+')' : '') : '');
+  const yeni = turBul(tur).ad + ' · ' + trTarih(bas) + ' – ' + trTarih(bit) + ' · ' + sayi(gun) + ' gün'
+             + (arac ? ' · araçla (' + plaka + ')' : '');
   // Revizeyi yapan, bu talebin onaylayıcısı mı? (öyleyse revize onay yerine geçer; yeniden onaya düşürmek mantıksız)
   const onayciRevize = (per(i.pid)?.yonetici === S.aktifId) || (ikMi() && !per(i.pid)?.yonetici);
 
   i.gecmis.push({rol:'Revize', kisi:adSoyad(S.aktifId), karar:'Değiştirildi', tarih:bugun(),
     eski: eski, yeni: yeni, gerekce: notu,
     not: eski + '  →  ' + yeni + (notu ? ' · ' + notu : '')});   // not: eski render'lar için korunur
-  i.tur = tur; i.bas = bas; i.bit = bit; i.gun = gun;
+  i.tur = tur; i.bas = bas; i.bit = bit; i.gun = gun; i.arac = arac; i.plaka = plaka;
   i.revizeNot = notu;
   i.revizeEden = adSoyad(S.aktifId);
   i.revizeTarih = bugun();
@@ -5942,7 +6019,7 @@ function takvimListesi(kayitlar){
       + '</div>'
       + '<div class="row" style="gap:8px;margin-top:7px;align-items:center">'
       + '<span class="mono" style="font-size:12.5px">'+trTarih(i.bas)+' – '+trTarih(i.bit)+'</span>'
-      + '<span class="pill">'+sayi(i.gun)+' gün</span>'
+      + '<span class="pill">'+sayi(i.gun)+' gün</span>'+aracRozet(i)
       + '<div class="sp"></div>'+durumTag(i.durum)+'</div></div>';
   }
   return h + '</div>';
@@ -6827,12 +6904,13 @@ function lstDisaAktar(){
   const kayitlar = lstKayitlar();
   if(!kayitlar.length){ bildir('İndirilecek kayıt yok.'); return; }
   const bas = ['personel','unvan','departman','lokasyon','izin_turu','donem_baslangic','donem_bitis','donem_gun',
-               'izin_baslangic','izin_bitis','izin_toplam_gun','ise_baslama','durum','talep_tarihi','aciklama'];
+               'izin_baslangic','izin_bitis','izin_toplam_gun','ise_baslama','durum','talep_tarihi','arac_ile','plaka','aciklama'];
   const satir = kayitlar.map(i => {
     const p = per(i.pid) || {}, pay = izinPayi(i, S.yil, 'liste');
     const donus = pay.tamBitis ? sonrakiIsGunu(i.bit) : '';
     return [adSoyad(i.pid), p.unvan||'', p.dept||'', p.lokasyon||'', turBul(i.tur).ad,
-            pay.bas, pay.bit, pay.gun, i.bas, i.bit, i.gun, donus||'', DURUM_AD[i.durum], i.olusturma||'', i.aciklama||'']
+            pay.bas, pay.bit, pay.gun, i.bas, i.bit, i.gun, donus||'', DURUM_AD[i.durum], i.olusturma||'',
+            i.arac ? 'evet' : 'hayir', i.arac ? (i.plaka||'') : '', i.aciklama||'']
       .map(x => '"'+String(x==null?'':x).replace(/"/g,'""')+'"').join(';');
   });
   indir('\uFEFF'+bas.join(';')+'\n'+satir.join('\n'),
@@ -7341,7 +7419,7 @@ function vIzinde(){
       + '<div class="hint" style="font-size:11.5px">'+esc(p.unvan||'')+'</div></td>'
       + '<td class="hint">'+esc(p.dept||'')+'</td>'
       + '<td class="hint">'+esc(p.lokasyon||'—')+'</td>'
-      + '<td><span class="tag n" style="border-color:'+t.renk+'55;color:'+t.renk+'"><i class="dot"></i>'+esc(t.ad)+'</span></td>'
+      + '<td><span class="tag n" style="border-color:'+t.renk+'55;color:'+t.renk+'"><i class="dot"></i>'+esc(t.ad)+'</span>'+aracRozet(i)+'</td>'
       + '<td class="mono" style="font-size:12.5px">'
         + (saatliIzin(i) ? trTarih(pay.bas)+' · '+i.saatBas+'–'+i.saatBit : trTarih(pay.bas)+' – '+trTarih(pay.bit))
         + (pay.kirpik ? ' <span class="pill" title="Seçili aya kırpıldı">kısmi</span>' : '')+'</td>'
